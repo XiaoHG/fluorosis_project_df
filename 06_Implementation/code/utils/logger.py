@@ -57,17 +57,20 @@ class ExperimentLogger:
             self.best_metric = val_metric
             self.best_epoch = epoch
 
+        def _cpu_state(sd):
+            return {k: v.cpu() for k, v in sd.items()}
+
         ckpt = {
             "epoch": epoch,
-            "model_state_dict": model.state_dict(),
+            "model_state_dict": _cpu_state(model.state_dict()),
             "best_metric": self.best_metric,
             "best_epoch": self.best_epoch,
             "extra": extra or {},
         }
         if optimizer:
-            ckpt["optimizer_state_dict"] = optimizer.state_dict()
+            ckpt["optimizer_state_dict"] = _cpu_state(optimizer.state_dict())
         if scheduler:
-            ckpt["scheduler_state_dict"] = scheduler.state_dict()
+            ckpt["scheduler_state_dict"] = _cpu_state(scheduler.state_dict())
 
         # Always save best
         torch.save(ckpt, self.ckpt_dir / "best.pt")

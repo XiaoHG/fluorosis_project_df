@@ -107,9 +107,11 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         optimizer.step()
 
         total_loss += loss.item()
+        del out, loss, alpha, z
 
         if (i + 1) % max(1, n_batches // 2) == 0 or i == 0:
-            print(f"  batch {i+1}/{n_batches} loss={loss.item():.4f}", flush=True)
+            mem = torch.cuda.memory_allocated(device) / 1024**3
+            print(f"  batch {i+1}/{n_batches} loss={total_loss/(i+1):.4f} GPU={mem:.1f}G", flush=True)
 
     return total_loss / n_batches
 
@@ -246,6 +248,7 @@ def main():
 
         n_epochs = cfg["training"]["epochs"]
         print(f"  Training {n_epochs} epochs (early stop patience={es_patience})...")
+        torch.cuda.reset_peak_memory_stats(device)
 
         for epoch in range(start_epoch, n_epochs):
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
@@ -267,11 +270,16 @@ def main():
 
             logger.write_row(epoch, val_metrics)
 
+            torch.cuda.empty_cache()
+            mem = torch.cuda.memory_allocated(device) / 1024**3
+            peak = torch.cuda.max_memory_allocated(device) / 1024**3
+
             pf = cfg["logging"].get("print_freq", 1)
             if (epoch + 1) % pf == 0 or epoch == 0 or is_best:
                 print(f"Epoch {epoch:3d} | loss: {train_loss:.4f} | "
                       f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
-                      f"theta*: {cal['theta']:.2f} | {logger.elapsed()} | {'* BEST' if is_best else ''}")
+                      f"theta*: {cal['theta']:.2f} | GPU: {mem:.1f}/{peak:.1f}G | "
+                      f"{logger.elapsed()} | {'* BEST' if is_best else ''}")
 
             if is_best:
                 patience_counter = 0

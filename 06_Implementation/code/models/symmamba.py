@@ -68,19 +68,19 @@ class MambaBlock(nn.Module):
 
     @staticmethod
     def _ssm_scan(delta, A, B_ssm, C_ssm, D):
-        """逐帧离散 SSM 扫描."""
+        """逐帧离散 SSM 扫描 (memory-efficient: per-step dA/dB)."""
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
-        delta = delta.view(B_sz, L, inner, 1)
-        A_exp = A.view(1, 1, 1, d_state)
-        dA = torch.exp(delta * A_exp)  # [B, L, inner, d_state]
-        dB = delta * B_ssm.unsqueeze(-2)  # [B, L, inner, d_state]
+        A = A.view(1, d_state)  # [1, d_state]
 
         h = torch.zeros(B_sz, inner, d_state, device=delta.device)
         ys = []
         for t in range(L):
-            h = dA[:, t] * h + dB[:, t]
-            y_t = (h * C_ssm[:, t].unsqueeze(-2)).sum(-1) + D
+            d_t = delta[:, t, :].unsqueeze(-1)        # [B, inner, 1]
+            dA_t = torch.exp(d_t * A)                  # [B, inner, d_state]
+            dB_t = d_t * B_ssm[:, t, :].unsqueeze(-2) # [B, inner, d_state]
+            h = dA_t * h + dB_t
+            y_t = (h * C_ssm[:, t, :].unsqueeze(-2)).sum(-1) + D  # [B, inner]
             ys.append(y_t)
         return torch.stack(ys, dim=1)
 
