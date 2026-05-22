@@ -80,7 +80,7 @@ logging:
   log_dir: "logs"
   checkpoint_dir: "checkpoints"
   csv_log: true
-  print_freq: 50
+  print_freq: 1
   save_best_only: true
 
 # 设备配置档案 — 通过 --profile <name> 切换

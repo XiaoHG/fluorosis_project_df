@@ -76,10 +76,11 @@ def build_model(cfg: dict) -> nn.Module:
     raise ValueError(f"Unknown model: {m['name']}")
 
 
-def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None):
+def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0):
     model.train()
     total_loss = 0.0
-    for x, y in loader:
+    n_batches = len(loader)
+    for i, (x, y) in enumerate(loader):
         x, y = x.to(device), y.to(device)
 
         if cutmix_fn is not None and torch.rand(1).item() < 0.5:
@@ -107,7 +108,10 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None):
 
         total_loss += loss.item()
 
-    return total_loss / len(loader)
+        if (i + 1) % max(1, n_batches // 2) == 0 or i == 0:
+            print(f"  batch {i+1}/{n_batches} loss={loss.item():.4f}", flush=True)
+
+    return total_loss / n_batches
 
 
 @torch.no_grad()
@@ -163,7 +167,9 @@ def main():
     print(f"Using device: {device}")
 
     image_size = tuple(cfg["data"]["image_size"])
+    print(f"Loading dataset from {cfg['data']['root']}...")
     full_ds = FluorosisDataset(cfg["data"]["root"])
+    print(f"  {len(full_ds)} images in {len(full_ds.CLASS_NAMES)} classes")
 
     split_path = cfg["cv"].get("split_file", "split_indices.json")
     if Path(split_path).exists():
@@ -181,15 +187,22 @@ def main():
         logger = ExperimentLogger(cfg["logging"]["log_dir"], fold_name,
                                    cfg["logging"]["save_best_only"])
         print(f"\n===== Fold {fold_idx}/{len(splits)} =====")
+        print(f"  Train: {len(split['train'])} samples, Val: {len(split['val'])} samples")
 
+        print(f"  Preparing DataLoader (spawn, {cfg['device']['num_workers']} workers)...")
         train_tf = get_train_transform(image_size)
         val_tf = get_val_transform(image_size)
         train_loader, val_loader = create_dataloaders(
             full_ds, split, cfg["training"]["batch_size"],
             train_tf, val_tf, cfg["device"]["num_workers"], cfg["device"]["pin_memory"])
         cutmix_fn = get_cutmix() if cfg["model"]["name"] == "symmamba" else None
+        print(f"  DataLoader ready ({len(train_loader)} batches/epoch)")
 
+        print(f"  Building model...")
         model = build_model(cfg).to(device)
+        n_params = sum(p.numel() for p in model.parameters())
+        n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"  Model: {n_params:,} params ({n_trainable:,} trainable)")
 
         head_params = []
         backbone_params = []
@@ -231,11 +244,14 @@ def main():
             best_metric = ckpt.get("best_metric", -float("inf"))
             print(f"Resumed from epoch {start_epoch}")
 
-        for epoch in range(start_epoch, cfg["training"]["epochs"]):
+        n_epochs = cfg["training"]["epochs"]
+        print(f"  Training {n_epochs} epochs (early stop patience={es_patience})...")
+
+        for epoch in range(start_epoch, n_epochs):
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
 
             train_loss = train_epoch(model, train_loader, optimizer,
-                                      cfg["loss"], device, cutmix_fn)
+                                      cfg["loss"], device, cutmix_fn, epoch)
 
             if epoch >= sch_cfg["warmup_epochs"]:
                 scheduler.step()
@@ -251,10 +267,11 @@ def main():
 
             logger.write_row(epoch, val_metrics)
 
-            if (epoch + 1) % cfg["logging"]["print_freq"] == 0:
-                print(f"Epoch {epoch:3d} | train_loss: {train_loss:.4f} | "
-                      f"val_qwk: {val_metrics['qwk']:.4f} | sdr: {val_metrics.get('sdr', 0):.4f} | "
-                      f"theta*: {cal['theta']:.2f} | time: {logger.elapsed()} | {'*' if is_best else ''}")
+            pf = cfg["logging"].get("print_freq", 1)
+            if (epoch + 1) % pf == 0 or epoch == 0 or is_best:
+                print(f"Epoch {epoch:3d} | loss: {train_loss:.4f} | "
+                      f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
+                      f"theta*: {cal['theta']:.2f} | {logger.elapsed()} | {'* BEST' if is_best else ''}")
 
             if is_best:
                 patience_counter = 0

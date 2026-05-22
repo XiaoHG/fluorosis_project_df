@@ -63,5 +63,5 @@ uncertainty:
 
 logging:
   log_dir: "logs"
-  print_freq: 50
+  print_freq: 1
   save_best_only: true
