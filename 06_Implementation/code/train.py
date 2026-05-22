@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 import torch.nn as nn
 import yaml
 
@@ -144,6 +145,8 @@ def main():
     parser.add_argument("--data_root", default="")
     parser.add_argument("--exp_name", default="")
     args = parser.parse_args()
+
+    mp.set_start_method('spawn', force=True)
 
     cfg = load_config(args.config, args.profile)
     if args.data_root:

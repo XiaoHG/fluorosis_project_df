@@ -23,7 +23,7 @@ device:
   profile: "rtx_pro_6000"
   gpu_id: 0
   amp: true
-  num_workers: 8
+  num_workers: 4
   pin_memory: true
 
 training:
@@ -85,8 +85,8 @@ logging:
 
 # 设备配置档案 — 通过 --profile <name> 切换
 device_profiles:
-  rtx_pro_6000: {batch_size: 16, amp: true,  num_workers: 8}
-  rtx4090:      {batch_size: 16, amp: true,  num_workers: 8}
+  rtx_pro_6000: {batch_size: 16, amp: true,  num_workers: 4}
+  rtx4090:      {batch_size: 16, amp: true,  num_workers: 4}
   rtx3090:      {batch_size: 16, amp: true,  num_workers: 4}
   rtx4070ti:    {batch_size: 12, amp: true,  num_workers: 4}
   apple_silicon: {batch_size: 8, amp: false, num_workers: 2, device: "mps"}

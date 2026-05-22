@@ -118,8 +118,8 @@ python code/train.py --config configs/baselines/b3_vit_mltrmr.yaml
 在 `configs/default.yaml` 中预定义了 6 个 device profiles, 通过 `--profile` 切换:
 
 ```bash
---profile rtx_pro_6000    # batch_size=16, amp=true,  workers=8
---profile rtx4090          # batch_size=16, amp=true,  workers=8
+--profile rtx_pro_6000    # batch_size=16, amp=true,  workers=4
+--profile rtx4090          # batch_size=16, amp=true,  workers=4
 --profile rtx4070ti        # batch_size=12, amp=true,  workers=4
 --profile cpu              # batch_size=2,  amp=false, workers=0
 ```

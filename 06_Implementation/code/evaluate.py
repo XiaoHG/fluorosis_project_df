@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 import yaml
 
 from data.dataset import FluorosisDataset, load_split_indices, _SubsetWithTransform
@@ -76,6 +77,8 @@ def main():
     parser.add_argument("--data_root", default="")
     parser.add_argument("--output_dir", default="evaluation_results")
     args = parser.parse_args()
+
+    mp.set_start_method('spawn', force=True)
 
     cfg = load_config(args.config)
     if args.data_root:
