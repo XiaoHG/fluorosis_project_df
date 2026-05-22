@@ -1,0 +1,80 @@
+# SymMamba Full (E6) — 完整 SymMamba + Ordinal EDL
+# 所有创新组件全开
+
+experiment:
+  name: "proposed_full"
+  seed: 42
+  project: "fluorosis_grading"
+
+data:
+  root: "dataset_df/dental_fluorosis/images"
+  image_size: [512, 256]
+  num_classes: 4
+  class_names: ["normal", "mild", "moderate", "severe"]
+
+cv:
+  n_folds: 5
+  split_file: "split_indices.json"
+
+device:
+  profile: "rtx_pro_6000"
+  gpu_id: 0
+  amp: true
+  num_workers: 8
+  pin_memory: true
+
+training:
+  batch_size: 16
+  epochs: 100
+  early_stop_patience: 20
+  early_stop_metric: "val_qwk"
+  early_stop_mode: "max"
+  grad_clip_norm: 1.0
+
+optimizer:
+  name: "adamw"
+  lr_backbone: 0.0001
+  lr_head: 0.001
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+
+scheduler:
+  name: "cosine"
+  warmup_epochs: 5
+  min_lr: 0.000001
+
+loss:
+  edl: {weight: 1.0}
+  ordinal: {weight: 0.1}
+  contrastive: {weight: 0.05, temperature: 0.07}
+  boundary: {weight: 0.01}
+
+model:
+  name: "symmamba"
+  variant: "full"
+  backbone:
+    patch_size: 4
+    embed_dim: 96
+    depths: [4, 2, 2]
+    d_state: 16
+    d_conv: 4
+    expand: 2
+    drop_path_rate: 0.1
+    dropout: 0.1
+  edl_head:
+    hidden_dim: 256
+    dropout: 0.3
+  ssl:
+    enabled: false
+
+uncertainty:
+  theta_range: [0.1, 0.9]
+  theta_step: 0.05
+  sdr_target: 0.95
+
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  csv_log: true
+  print_freq: 50
+  save_best_only: true

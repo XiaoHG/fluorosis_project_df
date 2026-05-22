@@ -1,0 +1,65 @@
+# B1: ResNet50 — 标准分类 baseline, 确立性能下界
+
+experiment:
+  name: "b1_resnet50"
+  seed: 42
+  project: "fluorosis_grading"
+
+data:
+  root: "dataset_df/dental_fluorosis/images"
+  image_size: [512, 256]
+  num_classes: 4
+  class_names: ["normal", "mild", "moderate", "severe"]
+
+cv:
+  n_folds: 5
+  split_file: "split_indices.json"
+
+device:
+  profile: "rtx_pro_6000"
+  gpu_id: 0
+
+training:
+  batch_size: 16
+  epochs: 100
+  early_stop_patience: 20
+  early_stop_metric: "val_qwk"
+  early_stop_mode: "max"
+  grad_clip_norm: 1.0
+
+optimizer:
+  name: "adamw"
+  lr_backbone: 0.0001
+  lr_head: 0.001
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+
+scheduler:
+  name: "cosine"
+  warmup_epochs: 5
+  min_lr: 0.000001
+
+loss:
+  edl: {weight: 1.0}
+  ordinal: {weight: 0.0}
+  contrastive: {weight: 0.0}
+  boundary: {weight: 0.0}
+
+model:
+  name: "resnet50"
+  variant: "baseline"
+  backbone:
+    pretrained: true
+  edl_head:
+    hidden_dim: 256
+    dropout: 0.3
+
+uncertainty:
+  theta_range: [0.1, 0.9]
+  theta_step: 0.05
+  sdr_target: 0.95
+
+logging:
+  log_dir: "logs"
+  print_freq: 50
+  save_best_only: true

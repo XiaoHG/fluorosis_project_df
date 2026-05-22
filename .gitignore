@@ -1,0 +1,34 @@
+# Dataset
+dataset_df/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Training outputs (keep dirs, ignore contents)
+06_Implementation/checkpoints/*
+06_Implementation/logs/*
+06_Implementation/results/*
+!06_Implementation/checkpoints/.gitkeep
+!06_Implementation/logs/.gitkeep
+!06_Implementation/results/.gitkeep
+
+# macOS
+._*
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Misc
+*.tmp
+*.log
