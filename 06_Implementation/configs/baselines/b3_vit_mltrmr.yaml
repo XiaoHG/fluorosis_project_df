@@ -7,7 +7,7 @@ experiment:
   project: "fluorosis_grading"
 
 data:
-  root: "dataset_df/dental_fluorosis/images"
+  root: "../dataset_df/dental_fluorosis/images"
   image_size: [224, 224]
   num_classes: 4
   class_names: ["normal", "mild", "moderate", "severe"]
