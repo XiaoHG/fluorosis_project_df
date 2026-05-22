@@ -6,6 +6,7 @@ Arch Scan + Cross Scan + CGF×3 + EDL Head. ~17M params.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint as cp
 from .edl_head import EDLHead
 
 
@@ -56,8 +57,10 @@ class MambaBlock(nn.Module):
 
         A = -torch.exp(self.A_log)  # [1, d_state]
 
-        # 选择性扫描
-        y_ssm = self._ssm_scan(delta, A, B_ssm, C_ssm, self.D)
+        # 选择性扫描 (checkpoint 避免 O(L) autograd 中间状态)
+        y_ssm = cp.checkpoint(
+            self._ssm_scan, delta, A, B_ssm, C_ssm, self.D,
+            use_reentrant=False)
 
         y = y_ssm * F.silu(z)
         y = self.out_proj(y)
