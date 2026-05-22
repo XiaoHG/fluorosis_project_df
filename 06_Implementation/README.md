@@ -147,7 +147,7 @@ logs/{exp_name}_fold{N}/
 
 ## 模型架构
 
-SymMamba: ~4M 参数, 3 阶段双路径 Mamba 网络
+SymMamba: 3 阶段双路径 Mamba 网络 (~17M 参数)
 
 - **Arch Scan**: 沿牙弓水平方向序列建模
 - **Cross Scan**: 左右半侧对称性感知 (共享权重)

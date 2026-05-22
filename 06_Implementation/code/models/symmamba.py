@@ -227,7 +227,7 @@ class SymMamba(nn.Module):
         self.cgf3 = CrossGatedFusion(dim)
 
         self.gap = nn.AdaptiveAvgPool2d(1)
-        self.edl_head = EDLHead(dim * 2, num_classes, edl_hidden, edl_dropout)
+        self.edl_head = EDLHead(dim * 3, num_classes, edl_hidden, edl_dropout)
         self._init_weights()
 
     def _init_weights(self):
@@ -253,9 +253,9 @@ class SymMamba(nn.Module):
 
         f_arch, _ = self.arch_s3(f)
         f_cross, _, _ = self.cross_s3(f)
-        f = self.cgf3(f_arch, f_cross)
+        f_cgf3 = self.cgf3(f_arch, f_cross)
 
-        fused = torch.cat([f_arch, f_cross], dim=1)
+        fused = torch.cat([f_cgf3, f_arch, f_cross], dim=1)
         z = self.gap(fused).flatten(1)
 
         out = self.edl_head(z)

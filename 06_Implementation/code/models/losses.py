@@ -61,11 +61,14 @@ def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
 
     Args:
         alpha: [B, K] Dirichlet 浓度参数。
-        y: [B] 整数标签 (0-3)。
+        y: [B] 整数标签 或 [B, K] soft labels (CutMix)。
         z: [B, D] 特征向量。
         loss_cfg: {"edl": {"weight":1.0}, "ordinal":{"weight":0.1}, ...}
     """
-    y_onehot = F.one_hot(y, num_classes=alpha.size(1)).float()
+    if y.dim() == 2 and y.size(1) == alpha.size(1):
+        y_onehot = y.float()  # already soft labels from CutMix
+    else:
+        y_onehot = F.one_hot(y.long(), num_classes=alpha.size(1)).float()
     w = loss_cfg
 
     l_edl = edl_loss(alpha, y_onehot)
