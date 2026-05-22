@@ -20,7 +20,7 @@
 │   └── evaluate.py             # 评估脚本
 ├── configs/
 │   ├── default.yaml            # 默认配置 (含 6 个 device profiles)
-│   ├── proposed.yaml           # 完整 SymMamba (E6)
+│   ├── proposed.yaml           # SymMamba E4 (核心消融, 不含 SSL)
 │   └── baselines/              # B1/B2/B3 配置文件
 └── requirements.txt
 ```
@@ -80,12 +80,14 @@ for cls in ['normal','mild','moderate','severe']:
 
 ## 训练
 
-### 完整 SymMamba (E6)
+### SymMamba E4 (核心消融: Arch+Cross+CGFx3+Ord EDL, 无 SSL)
 
 ```bash
 cd 06_Implementation
 python code/train.py --config configs/proposed.yaml --profile rtx_pro_6000
 ```
+
+> **E5/E6 (含 Oral SSL 预训练) 见下方实验路线图。** E4 先验证核心架构, SSL 预训练权重就绪后加载。
 
 ### Baseline 模型
 
@@ -127,7 +129,7 @@ python code/train.py --config configs/baselines/b3_vit_mltrmr.yaml
 ```bash
 python code/evaluate.py \
   --config configs/proposed.yaml \
-  --checkpoint logs/proposed_full_fold0/checkpoints/best.pt \
+  --checkpoint logs/e4_full_symmamba_fold0/checkpoints/best.pt \
   --output_dir evaluation_results
 ```
 
@@ -152,3 +154,33 @@ SymMamba: ~4M 参数, 3 阶段双路径 Mamba 网络
 - **CGF x3**: Cross Gated Fusion 逐阶段融合双路径特征
 - **EDL Head**: Dirichlet 证据输出 (alpha, belief, u, pred)
 - **损失**: L_EDL + 0.1 L_ord + 0.05 L_cont + 0.01 L_boundary
+
+## 实验路线图
+
+按消融计划 (`05_Exp_Design/05_ablation_plan.md`) 的实验顺序:
+
+| 阶段 | 实验 | 描述 | 状态 |
+|------|------|------|------|
+| P0 | E0 | ResNet50 baseline | 代码就绪 |
+| P0 | **E4** | **Full SymMamba + Ord EDL (无 SSL)** | **当前训练** |
+| P1 | E3 | Arch Scan only (消融 Cross Scan) | 待 E4 完成 |
+| P1 | E5 | E4 + Oral SSL 预训练加载 | 待公开数据集下载 + DINOv2 预训练 |
+| P2 | E6 | 完整方案 (= E5, 论文 Ours) | 待 E5 完成 |
+
+### E5/E6: Oral SSL 预训练 (待实现)
+
+需下载 3 个公开口腔数据集 (~65K 张) 做 DINOv2 自监督预训练:
+
+| 数据集 | 规模 | 用途 |
+|--------|------|------|
+| COde (Caries Ontology) | ~50K | 龋齿/口腔病变 |
+| Oral Diseases | ~13K | 口腔疾病分类 |
+| AlphaDent | ~1.3K | 牙齿分割 |
+
+预训练完成后, config 中启用:
+```yaml
+model:
+  ssl:
+    enabled: true
+    checkpoint: "path/to/dinov2_oral_pretrained.pt"
+```

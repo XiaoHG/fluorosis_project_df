@@ -1,8 +1,9 @@
-# SymMamba Full (E6) — 完整 SymMamba + Ordinal EDL
-# 所有创新组件全开
+# SymMamba Full (E4) — 完整 SymMamba + Ordinal EDL, 不含 SSL 预训练
+# 核心组件: Arch Scan + Cross Scan + CGFx3 + L_EDL/ord/cont/boundary
+# SSL 预训练: 见 configs/e5_ssl.yaml (需先下载公开口腔数据集预训练权重)
 
 experiment:
-  name: "proposed_full"
+  name: "e4_full_symmamba"
   seed: 42
   project: "fluorosis_grading"
 
