@@ -35,20 +35,24 @@ training:
 optimizer:
   name: "adamw"
   lr_backbone: 0.0001
-  lr_head: 0.001
+  lr_head: 0.0001
   weight_decay: 0.0001
   betas: [0.9, 0.999]
 
 scheduler:
   name: "cosine"
-  warmup_epochs: 5
+  warmup_epochs: 15
   min_lr: 0.000001
 
 loss:
   edl: {weight: 1.0}
+  kl: {weight: 0.1}
   ordinal: {weight: 0.1}
   contrastive: {weight: 0.05, temperature: 0.07}
   boundary: {weight: 0.01}
+  schedule:
+    aux_start: 10
+    aux_ramp: 10
 
 model:
   name: "symmamba"

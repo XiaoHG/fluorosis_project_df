@@ -1,4 +1,4 @@
-"""损失函数: L_EDL + L_ord + L_cont + L_boundary, 按 04_Model_Design/03_loss_functions.md."""
+"""损失函数: L_EDL + L_KL + L_ord + L_cont + L_boundary, 按 04_Model_Design/03_loss_functions.md."""
 
 import torch
 import torch.nn.functional as F
@@ -14,6 +14,32 @@ def edl_loss(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
     mse = ((y_onehot - b) ** 2).sum(dim=-1)
     evidence_reg = (y_onehot * (S - alpha) ** 2 / S.clamp(min=1e-6)).sum(dim=-1)
     return (mse + evidence_reg).mean()
+
+
+def kl_regularization(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
+    """KL 散度正则: 惩罚错误类别的证据累积, 防止 EDL 塌缩.
+
+    KL[Dir(π|α̃) || Dir(π|1)]  where  α̃ = y + (1-y)⊙α
+    只约束错误类别, 不影响正确类别的证据增长.
+    """
+    K = alpha.size(1)
+    alpha_tilde = y_onehot + (1 - y_onehot) * alpha
+    S_tilde = alpha_tilde.sum(dim=-1, keepdim=True)
+    kl = (torch.lgamma(S_tilde.squeeze(-1))
+          - torch.lgamma(alpha_tilde).sum(dim=-1)
+          - torch.lgamma(torch.tensor(K, dtype=alpha.dtype, device=alpha.device))
+          + ((alpha_tilde - 1) * (torch.digamma(alpha_tilde)
+                                  - torch.digamma(S_tilde))).sum(dim=-1))
+    return kl.mean()
+
+
+def _schedule_weight(full_weight: float, epoch: int, start: int, ramp: int) -> float:
+    """Linear ramp from 0 to full_weight between [start, start+ramp] epochs."""
+    if epoch < start:
+        return 0.0
+    if epoch >= start + ramp:
+        return full_weight
+    return full_weight * (epoch - start) / ramp
 
 
 def ordinal_regularization(alpha: torch.Tensor) -> torch.Tensor:
@@ -56,34 +82,58 @@ def boundary_uncertainty_loss(alpha: torch.Tensor, y: torch.Tensor) -> torch.Ten
 
 
 def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
-                       loss_cfg: dict) -> tuple[torch.Tensor, dict]:
-    """总损失 = w1·L_EDL + w2·L_ord + w3·L_cont + w4·L_boundary.
+                       loss_cfg: dict, epoch: int = 0) -> tuple[torch.Tensor, dict]:
+    """总损失 = w1·L_EDL + w2·L_KL + w3·L_ord + w4·L_cont + w5·L_boundary.
+
+    辅助损失 (L_ord/L_cont/L_boundary) 通过 schedule 延迟介入,
+    给 backbone 时间学习基础特征, 避免早期训练崩塌.
 
     Args:
         alpha: [B, K] Dirichlet 浓度参数。
         y: [B] 整数标签 或 [B, K] soft labels (CutMix)。
         z: [B, D] 特征向量。
-        loss_cfg: {"edl": {"weight":1.0}, "ordinal":{"weight":0.1}, ...}
+        loss_cfg: 含 weights 和可选的 schedule {aux_start, aux_ramp}。
+        epoch: 当前 epoch, 用于 schedule 计算。
     """
     if y.dim() == 2 and y.size(1) == alpha.size(1):
-        y_onehot = y.float()  # already soft labels from CutMix
+        y_onehot = y.float()
     else:
         y_onehot = F.one_hot(y.long(), num_classes=alpha.size(1)).float()
     w = loss_cfg
+    sch = loss_cfg.get("schedule", {})
+    aux_start = sch.get("aux_start", 10)
+    aux_ramp = sch.get("aux_ramp", 10)
+
+    w_edl = w.get("edl", {}).get("weight", 1.0)
+    w_kl = w.get("kl", {}).get("weight", 0.0)
+    w_ord = _schedule_weight(
+        w.get("ordinal", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
+    w_cont = _schedule_weight(
+        w.get("contrastive", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
+    w_bound = _schedule_weight(
+        w.get("boundary", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
 
     l_edl = edl_loss(alpha, y_onehot)
-    l_ord = ordinal_regularization(alpha)
-    l_cont = ordinal_contrastive_loss(
-        z, y, w.get("contrastive", {}).get("temperature", 0.07))
-    l_bound = boundary_uncertainty_loss(alpha, y)
+    l_kl = kl_regularization(alpha, y_onehot) if w_kl > 0 else torch.tensor(0.0, device=alpha.device)
 
-    total = (
-        w.get("edl", {}).get("weight", 1.0) * l_edl +
-        w.get("ordinal", {}).get("weight", 0.1) * l_ord +
-        w.get("contrastive", {}).get("weight", 0.05) * l_cont +
-        w.get("boundary", {}).get("weight", 0.01) * l_bound
-    )
+    total = w_edl * l_edl + w_kl * l_kl
 
-    comps = {"L_EDL": l_edl.item(), "L_ord": l_ord.item(),
-             "L_cont": l_cont.item(), "L_bound": l_bound.item()}
+    l_ord = torch.tensor(0.0, device=alpha.device)
+    l_cont = torch.tensor(0.0, device=alpha.device)
+    l_bound = torch.tensor(0.0, device=alpha.device)
+
+    if w_ord > 0:
+        l_ord = ordinal_regularization(alpha)
+        total = total + w_ord * l_ord
+    if w_cont > 0:
+        l_cont = ordinal_contrastive_loss(
+            z, y, w.get("contrastive", {}).get("temperature", 0.07))
+        total = total + w_cont * l_cont
+    if w_bound > 0:
+        l_bound = boundary_uncertainty_loss(alpha, y)
+        total = total + w_bound * l_bound
+
+    comps = {"L_EDL": l_edl.item(), "L_KL": l_kl.item(),
+             "L_ord": l_ord.item(), "L_cont": l_cont.item(),
+             "L_bound": l_bound.item()}
     return total, comps

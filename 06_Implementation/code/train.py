@@ -101,7 +101,7 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         if z is None:
             z = alpha
 
-        loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg)
+        loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
