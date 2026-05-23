@@ -4,6 +4,23 @@ import torch
 import torch.nn.functional as F
 
 
+def cross_entropy_loss(alpha: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """Cross-entropy on Dirichlet belief distribution.
+
+    belief = (alpha-1)/S  is a valid probability simplex.
+    Using log-belief as log-prob for CE is numerically stable
+    and provides a direct classification gradient, bypassing
+    EDL's problematic evidence regularizer on small datasets.
+    """
+    S = alpha.sum(dim=-1, keepdim=True)
+    log_belief = torch.log(alpha - 1 + 1e-8) - torch.log(S + 1e-8)
+    if y.dim() == 2:
+        y_idx = y.argmax(dim=-1)
+    else:
+        y_idx = y.long()
+    return F.nll_loss(log_belief, y_idx)
+
+
 def edl_loss(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
     """标准证据损失 (Sensoy et al., NeurIPS 2018).
 
@@ -104,8 +121,17 @@ def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
     aux_start = sch.get("aux_start", 10)
     aux_ramp = sch.get("aux_ramp", 10)
 
-    w_edl = w.get("edl", {}).get("weight", 1.0)
-    w_kl = w.get("kl", {}).get("weight", 0.0)
+    # primary losses
+    w_ce = _schedule_weight(
+        w.get("ce", {}).get("weight", 1.0), epoch,
+        sch.get("ce_start", 0), sch.get("ce_ramp", 1))
+    w_edl = _schedule_weight(
+        w.get("edl", {}).get("weight", 0.0), epoch,
+        sch.get("edl_start", 0), sch.get("edl_ramp", 1))
+    w_kl = _schedule_weight(
+        w.get("kl", {}).get("weight", 0.0), epoch,
+        sch.get("kl_start", 0), sch.get("kl_ramp", 1))
+    # auxiliary losses
     w_ord = _schedule_weight(
         w.get("ordinal", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
     w_cont = _schedule_weight(
@@ -113,10 +139,11 @@ def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
     w_bound = _schedule_weight(
         w.get("boundary", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
 
-    l_edl = edl_loss(alpha, y_onehot)
+    l_ce = cross_entropy_loss(alpha, y) if w_ce > 0 else torch.tensor(0.0, device=alpha.device)
+    l_edl = edl_loss(alpha, y_onehot) if w_edl > 0 else torch.tensor(0.0, device=alpha.device)
     l_kl = kl_regularization(alpha, y_onehot) if w_kl > 0 else torch.tensor(0.0, device=alpha.device)
 
-    total = w_edl * l_edl + w_kl * l_kl
+    total = w_ce * l_ce + w_edl * l_edl + w_kl * l_kl
 
     l_ord = torch.tensor(0.0, device=alpha.device)
     l_cont = torch.tensor(0.0, device=alpha.device)
@@ -133,7 +160,7 @@ def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
         l_bound = boundary_uncertainty_loss(alpha, y)
         total = total + w_bound * l_bound
 
-    comps = {"L_EDL": l_edl.item(), "L_KL": l_kl.item(),
+    comps = {"L_CE": l_ce.item(), "L_EDL": l_edl.item(), "L_KL": l_kl.item(),
              "L_ord": l_ord.item(), "L_cont": l_cont.item(),
              "L_bound": l_bound.item()}
     return total, comps

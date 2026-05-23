@@ -196,7 +196,7 @@ def main():
         train_loader, val_loader = create_dataloaders(
             full_ds, split, cfg["training"]["batch_size"],
             train_tf, val_tf, cfg["device"]["num_workers"], cfg["device"]["pin_memory"])
-        cutmix_fn = get_cutmix() if cfg["model"]["name"] == "symmamba" else None
+        cutmix_fn = get_cutmix() if cfg.get("augmentation", {}).get("use_cutmix", False) else None
         print(f"  DataLoader ready ({len(train_loader)} batches/epoch)")
 
         print(f"  Building model...")
