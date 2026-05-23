@@ -51,9 +51,14 @@ def kl_regularization(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tens
 
 
 def _schedule_weight(full_weight: float, epoch: int, start: int, ramp: int) -> float:
-    """Linear ramp from 0 to full_weight between [start, start+ramp] epochs."""
+    """Linear ramp from 0 to full_weight between [start, start+ramp] epochs.
+
+    ramp=0 means immediately active at full weight from epoch `start`.
+    """
     if epoch < start:
         return 0.0
+    if ramp <= 0:
+        return full_weight
     if epoch >= start + ramp:
         return full_weight
     return full_weight * (epoch - start) / ramp
@@ -121,16 +126,14 @@ def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
     aux_start = sch.get("aux_start", 10)
     aux_ramp = sch.get("aux_ramp", 10)
 
-    # primary losses
-    w_ce = _schedule_weight(
-        w.get("ce", {}).get("weight", 1.0), epoch,
-        sch.get("ce_start", 0), sch.get("ce_ramp", 1))
+    # primary losses: CE always active, EDL/KL scheduled
+    w_ce = w.get("ce", {}).get("weight", 1.0)
     w_edl = _schedule_weight(
         w.get("edl", {}).get("weight", 0.0), epoch,
-        sch.get("edl_start", 0), sch.get("edl_ramp", 1))
+        sch.get("edl_start", 5), sch.get("edl_ramp", 5))
     w_kl = _schedule_weight(
         w.get("kl", {}).get("weight", 0.0), epoch,
-        sch.get("kl_start", 0), sch.get("kl_ramp", 1))
+        sch.get("kl_start", 0), sch.get("kl_ramp", 5))
     # auxiliary losses
     w_ord = _schedule_weight(
         w.get("ordinal", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
