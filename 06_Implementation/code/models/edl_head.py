@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class EDLHead(nn.Module):
@@ -21,7 +22,7 @@ class EDLHead(nn.Module):
 
     def forward(self, z: torch.Tensor) -> dict:
         evidence = self.fc2(self.drop(self.act(self.fc1(z))))
-        alpha = torch.exp(evidence) + 1  # α ≥ 1
+        alpha = F.softplus(evidence) + 1  # α ≥ 1, 比 exp 更稳定
         S = alpha.sum(dim=-1, keepdim=True)
         return {
             "alpha": alpha,
