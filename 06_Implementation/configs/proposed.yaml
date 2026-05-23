@@ -21,7 +21,7 @@ device:
   profile: "rtx_pro_6000"
   gpu_id: 0
   amp: true
-  num_workers: 8
+  num_workers: 4
   pin_memory: true
 
 training:

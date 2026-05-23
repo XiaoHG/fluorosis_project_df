@@ -109,9 +109,8 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         total_loss += loss.item()
         del out, loss, alpha, z
 
-        if (i + 1) % max(1, n_batches // 2) == 0 or i == 0:
-            mem = torch.cuda.memory_allocated(device) / 1024**3
-            print(f"  batch {i+1}/{n_batches} loss={total_loss/(i+1):.4f} GPU={mem:.1f}G", flush=True)
+        mem = torch.cuda.memory_allocated(device) / 1024**3
+        print(f"  batch {i+1}/{n_batches} loss={total_loss/(i+1):.4f} GPU={mem:.1f}G", flush=True)
 
     return total_loss / n_batches
 

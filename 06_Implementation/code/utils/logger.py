@@ -58,7 +58,13 @@ class ExperimentLogger:
             self.best_epoch = epoch
 
         def _cpu_state(sd):
-            return {k: v.cpu() for k, v in sd.items()}
+            if isinstance(sd, torch.Tensor):
+                return sd.cpu()
+            if isinstance(sd, dict):
+                return {k: _cpu_state(v) for k, v in sd.items()}
+            if isinstance(sd, list):
+                return [_cpu_state(v) for v in sd]
+            return sd
 
         ckpt = {
             "epoch": epoch,
