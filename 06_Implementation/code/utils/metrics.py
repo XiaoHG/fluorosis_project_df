@@ -133,6 +133,7 @@ def compute_all_metrics(y_true: NDArray, y_pred: NDArray,
     """
     results = {}
     results["qwk"] = compute_qwk(y_true, y_pred)
+    results["accuracy"] = float((y_pred == y_true).mean())
     results["macro_f1"] = compute_macro_f1(y_true, y_pred)
 
     if u is not None:

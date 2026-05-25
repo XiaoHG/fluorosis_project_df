@@ -277,6 +277,7 @@ def main():
             pf = cfg["logging"].get("print_freq", 1)
             if (epoch + 1) % pf == 0 or epoch == 0 or is_best:
                 print(f"Epoch {epoch:3d} | loss: {train_loss:.4f} | "
+                      f"Acc: {val_metrics.get('accuracy', 0):.4f} | F1: {val_metrics['macro_f1']:.4f} | "
                       f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
                       f"theta*: {cal['theta']:.2f} | GPU: {mem:.1f}/{peak:.1f}G | "
                       f"{logger.elapsed()} | {'* BEST' if is_best else ''}")
