@@ -22,11 +22,12 @@ class EDLHead(nn.Module):
 
     def forward(self, z: torch.Tensor) -> dict:
         evidence = self.fc2(self.drop(self.act(self.fc1(z))))
-        alpha = F.softplus(evidence) + 1  # α ≥ 1, 比 exp 更稳定
+        alpha = F.softplus(evidence) + 1  # α ≥ 1
         S = alpha.sum(dim=-1, keepdim=True)
         return {
             "alpha": alpha,
             "belief": (alpha - 1) / S.clamp(min=1e-6),
             "u": alpha.size(1) / S.squeeze(-1).clamp(min=1e-6),
             "pred": alpha.argmax(dim=-1),
+            "logits": evidence,  # raw logits for standard CE
         }

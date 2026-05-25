@@ -62,6 +62,7 @@ class BaselineResNet50CORAL(nn.Module):
             "u": alpha.size(1) / S.squeeze(-1).clamp(min=1e-6),
             "pred": pred,
             "features": f,
+            "logits": torch.cat([probs, torch.zeros_like(probs[:, :1])], dim=-1),
         }
 
 

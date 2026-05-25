@@ -98,11 +98,10 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
             y_target = y
 
         alpha = out["alpha"]
-        z = out.get("features", out.get("logits", None))
-        if z is None:
-            z = alpha
+        z = out.get("features", alpha)
+        logits = out.get("logits", None)
 
-        loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch)
+        loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch, logits=logits)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()

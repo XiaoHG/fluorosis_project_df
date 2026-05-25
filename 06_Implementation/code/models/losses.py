@@ -1,31 +1,29 @@
-"""损失函数: L_EDL + L_KL + L_ord + L_cont + L_boundary, 按 04_Model_Design/03_loss_functions.md."""
+"""损失函数: L_CE (primary) + L_EDL + L_KL + L_ord + L_cont + L_boundary (aux).
+
+Standard CrossEntropy on raw logits provides strong, direct gradient signal.
+EDL/KL losses serve as lightweight regularizers for uncertainty calibration.
+All EDL-family losses are delayed to let backbone learn basic features first.
+"""
 
 import torch
 import torch.nn.functional as F
 
 
-def cross_entropy_loss(alpha: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """Cross-entropy on Dirichlet belief distribution.
+# ---- Primary classification loss (standard CE on raw logits) -----
 
-    belief = (alpha-1)/S  is a valid probability simplex.
-    Using log-belief as log-prob for CE is numerically stable
-    and provides a direct classification gradient, bypassing
-    EDL's problematic evidence regularizer on small datasets.
-    """
-    S = alpha.sum(dim=-1, keepdim=True)
-    log_belief = torch.log(alpha - 1 + 1e-8) - torch.log(S + 1e-8)
-    if y.dim() == 2:
+def cross_entropy_loss(logits: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """Standard cross-entropy on raw logits — strong, direct gradient."""
+    if y.dim() == 2 and y.size(1) == logits.size(1):
         y_idx = y.argmax(dim=-1)
     else:
         y_idx = y.long()
-    return F.nll_loss(log_belief, y_idx)
+    return F.cross_entropy(logits, y_idx)
 
+
+# ---- EDL losses (auxiliary only) ----------------------------------
 
 def edl_loss(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
-    """标准证据损失 (Sensoy et al., NeurIPS 2018).
-
-    L_EDL = Σ_k (y_k-b_k)² + Σ_k y_k·(S-α_k)²/S
-    """
+    """标准证据损失 (Sensoy et al., NeurIPS 2018)."""
     S = alpha.sum(dim=-1, keepdim=True)
     b = (alpha - 1) / S.clamp(min=1e-6)
     mse = ((y_onehot - b) ** 2).sum(dim=-1)
@@ -34,11 +32,7 @@ def edl_loss(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
 
 
 def kl_regularization(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
-    """KL 散度正则: 惩罚错误类别的证据累积, 防止 EDL 塌缩.
-
-    KL[Dir(π|α̃) || Dir(π|1)]  where  α̃ = y + (1-y)⊙α
-    只约束错误类别, 不影响正确类别的证据增长.
-    """
+    """KL 散度正则: 惩罚错误类别的证据累积."""
     K = alpha.size(1)
     alpha_tilde = y_onehot + (1 - y_onehot) * alpha
     S_tilde = alpha_tilde.sum(dim=-1, keepdim=True)
@@ -50,11 +44,10 @@ def kl_regularization(alpha: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tens
     return kl.mean()
 
 
-def _schedule_weight(full_weight: float, epoch: int, start: int, ramp: int) -> float:
-    """Linear ramp from 0 to full_weight between [start, start+ramp] epochs.
+# ---- Schedule helper -----------------------------------------------
 
-    ramp=0 means immediately active at full weight from epoch `start`.
-    """
+def _schedule_weight(full_weight: float, epoch: int, start: int, ramp: int) -> float:
+    """Linear ramp from 0 to full_weight between [start, start+ramp] epochs."""
     if epoch < start:
         return 0.0
     if ramp <= 0:
@@ -64,8 +57,10 @@ def _schedule_weight(full_weight: float, epoch: int, start: int, ramp: int) -> f
     return full_weight * (epoch - start) / ramp
 
 
+# ---- Auxiliary losses ----------------------------------------------
+
 def ordinal_regularization(alpha: torch.Tensor) -> torch.Tensor:
-    """有序信念正则化: 禁止 b_k 跳跃。L_ord = Σ_{k=1}^{K-2} max(0, b_{k-1}+b_{k+1}-2b_k)"""
+    """有序信念正则化: 禁止 b_k 跳跃."""
     S = alpha.sum(dim=-1, keepdim=True)
     b = (alpha - 1) / S.clamp(min=1e-6)
     K = b.size(1)
@@ -75,7 +70,7 @@ def ordinal_regularization(alpha: torch.Tensor) -> torch.Tensor:
 
 def ordinal_contrastive_loss(z: torch.Tensor, y: torch.Tensor,
                              temperature: float = 0.07) -> torch.Tensor:
-    """有序对比损失: 拉近相邻等级, 推远跨级。"""
+    """有序对比损失: 拉近相邻等级, 推远跨级."""
     z = F.normalize(z, p=2, dim=-1)
     sim = torch.matmul(z, z.T) / temperature
     y_int = y if y.dim() == 1 else y.argmax(dim=-1)
@@ -93,7 +88,7 @@ def ordinal_contrastive_loss(z: torch.Tensor, y: torch.Tensor,
 
 
 def boundary_uncertainty_loss(alpha: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """边界不确定性先验: 邻级样本 u 允许升高。L_boundary = -Σ_{|y_j-y_i|=1} log(u_i)"""
+    """边界不确定性先验: 邻级样本 u 允许升高."""
     S = alpha.sum(dim=-1)
     u = alpha.size(1) / S.clamp(min=1e-6)
     y_int = y if y.dim() == 1 else y.argmax(dim=-1)
@@ -103,50 +98,73 @@ def boundary_uncertainty_loss(alpha: torch.Tensor, y: torch.Tensor) -> torch.Ten
     return -torch.log(u[adj_mask.any(dim=1)].clamp(min=1e-6)).mean()
 
 
-def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
-                       loss_cfg: dict, epoch: int = 0) -> tuple[torch.Tensor, dict]:
-    """总损失 = w1·L_EDL + w2·L_KL + w3·L_ord + w4·L_cont + w5·L_boundary.
+# ---- Total loss ----------------------------------------------------
 
-    辅助损失 (L_ord/L_cont/L_boundary) 通过 schedule 延迟介入,
-    给 backbone 时间学习基础特征, 避免早期训练崩塌.
+def compute_total_loss(alpha: torch.Tensor, y: torch.Tensor, z: torch.Tensor,
+                       loss_cfg: dict, epoch: int = 0,
+                       logits: torch.Tensor = None) -> tuple[torch.Tensor, dict]:
+    """Total loss with standard CE as primary, EDL-family as delayed auxiliary.
+
+    CE on raw logits is always active with weight 1.0 — it provides the main
+    classification gradient. EDL/KL/ordinal/contrastive/boundary are lightweight
+    regularizers that start later to avoid interfering with early feature learning.
 
     Args:
-        alpha: [B, K] Dirichlet 浓度参数。
-        y: [B] 整数标签 或 [B, K] soft labels (CutMix)。
-        z: [B, D] 特征向量。
-        loss_cfg: 含 weights 和可选的 schedule {aux_start, aux_ramp}。
-        epoch: 当前 epoch, 用于 schedule 计算。
+        alpha: [B, K] Dirichlet concentration parameters.
+        y: [B] integer labels or [B, K] soft labels (CutMix).
+        z: [B, D] feature vectors.
+        loss_cfg: loss weights and schedule.
+        epoch: current epoch for schedule computation.
+        logits: [B, K] raw logits for standard CE (if None, fall back to belief-based CE).
     """
+    # Convert labels
     if y.dim() == 2 and y.size(1) == alpha.size(1):
         y_onehot = y.float()
     else:
         y_onehot = F.one_hot(y.long(), num_classes=alpha.size(1)).float()
+
     w = loss_cfg
     sch = loss_cfg.get("schedule", {})
-    aux_start = sch.get("aux_start", 10)
-    aux_ramp = sch.get("aux_ramp", 10)
 
-    # primary losses: CE always active, EDL/KL scheduled
+    # --- Primary: standard CE on raw logits (always active) ---
     w_ce = w.get("ce", {}).get("weight", 1.0)
-    w_edl = _schedule_weight(
-        w.get("edl", {}).get("weight", 0.0), epoch,
-        sch.get("edl_start", 5), sch.get("edl_ramp", 5))
-    w_kl = _schedule_weight(
-        w.get("kl", {}).get("weight", 0.0), epoch,
-        sch.get("kl_start", 0), sch.get("kl_ramp", 5))
-    # auxiliary losses
-    w_ord = _schedule_weight(
-        w.get("ordinal", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
-    w_cont = _schedule_weight(
-        w.get("contrastive", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
-    w_bound = _schedule_weight(
-        w.get("boundary", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
+    if logits is not None and w_ce > 0:
+        l_ce = cross_entropy_loss(logits, y)
+    elif w_ce > 0:
+        # Fallback: belief-based CE (for baselines without logits output)
+        S = alpha.sum(dim=-1, keepdim=True)
+        log_belief = torch.log(alpha - 1 + 1e-8) - torch.log(S + 1e-8)
+        if y.dim() == 2 and y.size(1) == alpha.size(1):
+            y_idx = y.argmax(dim=-1)
+        else:
+            y_idx = y.long()
+        l_ce = F.nll_loss(log_belief, y_idx)
+    else:
+        l_ce = torch.tensor(0.0, device=alpha.device)
 
-    l_ce = cross_entropy_loss(alpha, y) if w_ce > 0 else torch.tensor(0.0, device=alpha.device)
+    total = w_ce * l_ce
+
+    # --- EDL losses (auxiliary, delayed to let backbone learn first) ---
+    edl_start = sch.get("edl_start", 30)
+    edl_ramp = sch.get("edl_ramp", 15)
+    kl_start = sch.get("kl_start", 30)
+    kl_ramp = sch.get("kl_ramp", 15)
+
+    w_edl = _schedule_weight(w.get("edl", {}).get("weight", 0.0), epoch, edl_start, edl_ramp)
+    w_kl = _schedule_weight(w.get("kl", {}).get("weight", 0.0), epoch, kl_start, kl_ramp)
+
     l_edl = edl_loss(alpha, y_onehot) if w_edl > 0 else torch.tensor(0.0, device=alpha.device)
     l_kl = kl_regularization(alpha, y_onehot) if w_kl > 0 else torch.tensor(0.0, device=alpha.device)
 
-    total = w_ce * l_ce + w_edl * l_edl + w_kl * l_kl
+    total = total + w_edl * l_edl + w_kl * l_kl
+
+    # --- Auxiliary losses (ordinal, contrastive, boundary) ---
+    aux_start = sch.get("aux_start", 40)
+    aux_ramp = sch.get("aux_ramp", 20)
+
+    w_ord = _schedule_weight(w.get("ordinal", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
+    w_cont = _schedule_weight(w.get("contrastive", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
+    w_bound = _schedule_weight(w.get("boundary", {}).get("weight", 0.0), epoch, aux_start, aux_ramp)
 
     l_ord = torch.tensor(0.0, device=alpha.device)
     l_cont = torch.tensor(0.0, device=alpha.device)
