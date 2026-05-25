@@ -25,7 +25,7 @@ device:
   pin_memory: true
 
 training:
-  batch_size: 16
+  batch_size: 32
   epochs: 100
   early_stop_patience: 20
   early_stop_metric: "val_qwk"
@@ -65,8 +65,8 @@ model:
   backbone:
     patch_size: 8
     embed_dim: 96
-    depths: [2, 1, 1]
-    d_state: 8
+    depths: [4, 2, 2]
+    d_state: 16
     d_conv: 4
     expand: 2
     drop_path_rate: 0.1

@@ -62,6 +62,7 @@ def build_model(cfg: dict) -> nn.Module:
             edl_hidden=m["edl_head"]["hidden_dim"],
             edl_dropout=m["edl_head"]["dropout"],
             use_sym_head=True,
+            patch_size=m["backbone"].get("patch_size", 4),
         )
     elif m["name"] in ("resnet50", "resnet50_coral", "vit"):
         edl_cfg = m.get("edl_head", {})

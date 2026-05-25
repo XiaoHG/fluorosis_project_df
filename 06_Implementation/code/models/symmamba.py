@@ -202,9 +202,9 @@ class SymMamba(nn.Module):
     def __init__(self, in_channels=3, num_classes=4, embed_dim=96,
                  depths=(4, 2, 2), d_state=16, d_conv=4, expand=2,
                  dropout=0.1, edl_hidden=256, edl_dropout=0.3,
-                 use_sym_head=True):
+                 use_sym_head=True, patch_size=4):
         super().__init__()
-        self.patch_embed = PatchEmbed(in_channels, embed_dim)
+        self.patch_embed = PatchEmbed(in_channels, embed_dim, patch_size)
         dim = embed_dim
 
         # Stage 1
