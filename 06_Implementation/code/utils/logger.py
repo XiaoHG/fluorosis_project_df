@@ -93,6 +93,34 @@ class ExperimentLogger:
         np.savetxt(path, np.stack([labels, preds], axis=1), fmt="%d",
                     delimiter=",", header="label,pred", comments="")
 
+    def save_latest(self, model, epoch, optimizer=None, scheduler=None,
+                     rng_state=None, extra=None):
+        """Save latest checkpoint for crash recovery (always written)."""
+        def _cpu_state(sd):
+            if isinstance(sd, torch.Tensor):
+                return sd.cpu()
+            if isinstance(sd, dict):
+                return {k: _cpu_state(v) for k, v in sd.items()}
+            if isinstance(sd, list):
+                return [_cpu_state(v) for v in sd]
+            return sd
+
+        ckpt = {
+            "epoch": epoch,
+            "model_state_dict": _cpu_state(model.state_dict()),
+            "best_metric": self.best_metric,
+            "best_epoch": self.best_epoch,
+        }
+        if optimizer:
+            ckpt["optimizer_state_dict"] = _cpu_state(optimizer.state_dict())
+        if scheduler:
+            ckpt["scheduler_state_dict"] = _cpu_state(scheduler.state_dict())
+        if rng_state:
+            ckpt["rng_state"] = rng_state
+        if extra:
+            ckpt["extra"] = extra
+        torch.save(ckpt, self.ckpt_dir / "latest.pt")
+
     def save_summary(self, metrics: dict, filename: str = "summary.json"):
         """Save final evaluation summary."""
         # Convert numpy types

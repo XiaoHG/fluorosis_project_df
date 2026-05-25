@@ -239,11 +239,20 @@ def main():
         es_patience = cfg["training"]["early_stop_patience"]
 
         if args.resume:
-            ckpt = torch.load(args.resume, map_location=device)
+            ckpt = torch.load(args.resume, map_location=device, weights_only=False)
             model.load_state_dict(ckpt["model_state_dict"])
             optimizer.load_state_dict(ckpt.get("optimizer_state_dict", {}))
             start_epoch = ckpt["epoch"] + 1
             best_metric = ckpt.get("best_metric", -float("inf"))
+            logger.best_metric = ckpt.get("best_metric", -float("inf"))
+            logger.best_epoch = ckpt.get("best_epoch", -1)
+            if "rng_state" in ckpt:
+                rs = ckpt["rng_state"]
+                random.setstate(rs["random"])
+                np.random.set_state(rs["numpy"])
+                torch.set_rng_state(rs["torch"])
+                if "torch_cuda" in rs and torch.cuda.is_available():
+                    torch.cuda.set_rng_state(rs["torch_cuda"])
             print(f"Resumed from epoch {start_epoch}")
 
         n_epochs = cfg["training"]["epochs"]
@@ -281,6 +290,16 @@ def main():
                       f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
                       f"theta*: {cal['theta']:.2f} | GPU: {mem:.1f}/{peak:.1f}G | "
                       f"{logger.elapsed()} | {'* BEST' if is_best else ''}")
+
+            rng_state = {
+                "random": random.getstate(),
+                "numpy": np.random.get_state(),
+                "torch": torch.get_rng_state(),
+            }
+            if torch.cuda.is_available():
+                rng_state["torch_cuda"] = torch.cuda.get_rng_state()
+            logger.save_latest(model, epoch, optimizer, scheduler,
+                               rng_state, extra={"theta": cal["theta"]})
 
             if is_best:
                 patience_counter = 0
