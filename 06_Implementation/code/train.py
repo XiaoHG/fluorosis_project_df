@@ -309,7 +309,7 @@ def main():
                 print(f"Early stopping at epoch {epoch}")
                 break
 
-        best_ckpt = torch.load(logger.ckpt_dir / "best.pt", map_location=device)
+        best_ckpt = torch.load(logger.ckpt_dir / "best.pt", map_location=device, weights_only=False)
         model.load_state_dict(best_ckpt["model_state_dict"])
         val_metrics, _ = validate(model, val_loader, device)
         logger.save_summary(val_metrics)

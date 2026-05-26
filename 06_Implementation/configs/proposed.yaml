@@ -46,24 +46,24 @@ scheduler:
 
 loss:
   ce: {weight: 1.0}
-  edl: {weight: 0.02}
-  kl: {weight: 0.01}
+  edl: {weight: 0.05}
+  kl: {weight: 0.02}
   ordinal: {weight: 0.05}
   contrastive: {weight: 0.02, temperature: 0.07}
   boundary: {weight: 0.005}
   schedule:
-    edl_start: 30
+    edl_start: 20
     edl_ramp: 15
-    kl_start: 30
+    kl_start: 20
     kl_ramp: 15
-    aux_start: 40
+    aux_start: 35
     aux_ramp: 20
 
 model:
   name: "symmamba"
   variant: "full"
   backbone:
-    patch_size: 8
+    patch_size: 4
     embed_dim: 96
     depths: [4, 2, 2]
     d_state: 16
