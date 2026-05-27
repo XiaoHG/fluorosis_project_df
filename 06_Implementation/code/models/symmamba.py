@@ -63,37 +63,57 @@ class MambaBlock(nn.Module):
         return residual + self.dropout(y)
 
     @staticmethod
-    def _ssm_scan(delta, A, B_ssm, C_ssm, D):
-        """并行化 SSM 扫描: cumprod/cumsum 替代逐帧 for 循环.
+    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size: int = 512):
+        """分段并行 SSM 扫描: chunk 间顺序传递 h_state, chunk 内 cumsum 向量化.
 
-        h_t = exp(delta_t * A) * h_{t-1} + delta_t * B_t
-        → 向量化: h_t = a_cumprod[t] * cumsum(b / a_cumprod)[t]
-
-        float64 计算保证长序列数值稳定性.
+        全序列向量化会 OOM (L=8192 时单 tensor 6+ GB).
+        chunk_size=512 时每段 ~50 MB, ~16 次迭代.
         """
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
+        A_v = A.view(1, 1, 1, d_state)  # [1, 1, 1, d_state]
 
-        delta_d = delta.double()
-        A_d = A.view(1, 1, 1, d_state).double()
-        B_d = B_ssm.unsqueeze(2).double()
-        C_d = C_ssm.unsqueeze(2).double()
+        # 填充到整 chunk
+        if L % chunk_size != 0:
+            pad = chunk_size - L % chunk_size
+            delta = F.pad(delta, (0, 0, 0, pad))
+            B_ssm = F.pad(B_ssm, (0, 0, 0, pad))
+            C_ssm = F.pad(C_ssm, (0, 0, 0, pad))
+            L_pad = L + pad
+        else:
+            L_pad = L
 
-        log_a = delta_d.unsqueeze(-1) * A_d               # [B, L, inner, d_state]
-        log_a_cum = torch.cumsum(log_a, dim=1)
+        n_chunks = L_pad // chunk_size
+        h = torch.zeros(B_sz, inner, d_state, device=delta.device)
+        ys = []
 
-        b = delta_d.unsqueeze(-1) * B_d                   # [B, L, inner, d_state]
+        for c in range(n_chunks):
+            s, e = c * chunk_size, (c + 1) * chunk_size
+            d_c = delta[:, s:e]          # [B, K, inner]
+            B_c = B_ssm[:, s:e]          # [B, K, d_state]
+            C_c = C_ssm[:, s:e]          # [B, K, d_state]
+            K = d_c.size(1)
 
-        a_cum = torch.exp(log_a_cum)
-        a_cum_safe = a_cum.clamp(min=1e-30)
-        b_discounted = b / a_cum_safe
-        b_discounted = torch.nan_to_num(b_discounted, nan=0.0, posinf=0.0, neginf=0.0)
+            log_a = d_c.unsqueeze(-1) * A_v            # [B, K, inner, d_state]
+            log_a_cum = torch.cumsum(log_a, dim=1)
 
-        h = a_cum * torch.cumsum(b_discounted, dim=1)
-        h = torch.nan_to_num(h, nan=0.0, posinf=0.0, neginf=0.0)
+            b = d_c.unsqueeze(-1) * B_c.unsqueeze(2)   # [B, K, inner, d_state]
 
-        y = (h.float() * C_d.float()).sum(-1) + D.float()  # [B, L, inner]
-        return y
+            a_cum = torch.exp(log_a_cum)
+            # h_init 贡献: a_cum[t] * h_prev
+            h_c = a_cum * h.unsqueeze(1)
+            # b 贡献: a_cum[t] * cumsum(b / a_cum)[t]
+            b_scaled = b / a_cum.clamp(min=1e-15)
+            b_scaled = torch.nan_to_num(b_scaled, nan=0.0, posinf=0.0, neginf=0.0)
+            h_c = h_c + a_cum * torch.cumsum(b_scaled, dim=1)
+            h_c = torch.nan_to_num(h_c, nan=0.0, posinf=0.0, neginf=0.0)
+
+            y_c = (h_c * C_c.unsqueeze(2)).sum(-1) + D  # [B, K, inner]
+            ys.append(y_c)
+
+            h = h_c[:, -1]  # 传给下一段
+
+        return torch.cat(ys, dim=1)[:, :L]
 
 
 # ---- Patch Embedding ----------------------------------------------

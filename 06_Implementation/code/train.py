@@ -92,7 +92,7 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
 
         optimizer.zero_grad()
 
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.amp.autocast('cuda', enabled=use_amp):
             out = model(x)
 
         y_target = y_mixed if y_mixed is not None else y
@@ -100,7 +100,7 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         z = out.get("features", alpha)
         logits = out.get("logits", None)
 
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.amp.autocast('cuda', enabled=use_amp):
             loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch, logits=logits)
 
         if use_amp:
@@ -264,7 +264,7 @@ def main():
         torch.cuda.reset_peak_memory_stats(device)
 
         use_amp = cfg["device"].get("amp", False) and device.type == "cuda"
-        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        scaler = torch.amp.GradScaler('cuda', enabled=use_amp) if use_amp else None
         if use_amp:
             torch.set_float32_matmul_precision("high")
             print(f"  AMP enabled (float32 matmul precision: high)")
