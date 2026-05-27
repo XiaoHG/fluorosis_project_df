@@ -6,6 +6,7 @@ Arch Scan + Cross Scan + CGF×3 + EDL Head. ~17M params.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint as cp
 from .edl_head import EDLHead
 
 
@@ -56,67 +57,35 @@ class MambaBlock(nn.Module):
 
         A = -torch.exp(self.A_log)  # [1, d_state]
 
-        y_ssm = self._ssm_scan(delta, A, B_ssm, C_ssm, self.D)
+        # checkpoint 丢弃 forward 中间状态, backward 时重算 (O(1) 显存)
+        y_ssm = cp.checkpoint(self._ssm_scan, delta, A, B_ssm, C_ssm,
+                              self.D, use_reentrant=False)
 
         y = y_ssm * F.silu(z)
         y = self.out_proj(y)
         return residual + self.dropout(y)
 
     @staticmethod
-    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size: int = 256):
-        """分段逐 state 并行扫描: 不对 d_state 广播, 避免 16× 显存放.
+    def _ssm_scan(delta, A, B_ssm, C_ssm, D):
+        """逐帧 SSM 扫描 — O(1) 中间状态.
 
-        原版 broadcast [B,K,inner,d_state] 每 chunk 200 MB.
-        逐 state 处理后每 state 仅 [B,K,inner] = 12 MB, 16 次迭代.
+        每步操作 [B, inner, d_state] = [B, 192, 16] ≈ 0.4 MB.
+        通过 checkpoint 丢弃 autograd 保存的 h 状态, backward 重算.
         """
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
-        A = A.view(d_state)  # [d_state]
+        A = A.view(1, d_state)  # [1, d_state]
 
-        # 填充到整 chunk
-        if L % chunk_size != 0:
-            pad = chunk_size - L % chunk_size
-            delta = F.pad(delta, (0, 0, 0, pad))
-            B_ssm = F.pad(B_ssm, (0, 0, 0, pad))
-            C_ssm = F.pad(C_ssm, (0, 0, 0, pad))
-            L_pad = L + pad
-        else:
-            L_pad = L
-
-        n_chunks = L_pad // chunk_size
         h = torch.zeros(B_sz, inner, d_state, device=delta.device)
         ys = []
-
-        for c in range(n_chunks):
-            s, e = c * chunk_size, (c + 1) * chunk_size
-            d_c = delta[:, s:e]          # [B, K, inner]
-            B_c = B_ssm[:, s:e]          # [B, K, d_state]
-            C_c = C_ssm[:, s:e]          # [B, K, d_state]
-            K = d_c.size(1)
-
-            y_c = torch.zeros(B_sz, K, inner, device=delta.device)
-            h_new = torch.empty_like(h)
-
-            for s_idx in range(d_state):
-                a_s = d_c * A[s_idx]                       # [B, K, inner]
-                a_cum = torch.exp(torch.cumsum(a_s, dim=1)) # [B, K, inner]
-                b_s = d_c * B_c[:, :, s_idx:s_idx+1]         # [B, K, inner]
-
-                # h_init 贡献
-                h_c = a_cum * h[:, :, s_idx].unsqueeze(1)  # [B, K, inner]
-                # b 贡献
-                b_scaled = b_s / a_cum.clamp(min=1e-15)
-                b_scaled = torch.nan_to_num(b_scaled, nan=0.0, posinf=0.0, neginf=0.0)
-                h_c = h_c + a_cum * torch.cumsum(b_scaled, dim=1)
-
-                y_c += h_c * C_c[:, :, s_idx:s_idx+1]       # [B, K, inner]
-                h_new[:, :, s_idx] = h_c[:, -1]            # [B, inner]
-
-            y_c += D  # skip connection
-            ys.append(y_c)
-            h = h_new
-
-        return torch.cat(ys, dim=1)[:, :L]
+        for t in range(L):
+            d_t = delta[:, t, :].unsqueeze(-1)        # [B, inner, 1]
+            dA_t = torch.exp(d_t * A)                  # [B, inner, d_state]
+            dB_t = d_t * B_ssm[:, t, :].unsqueeze(-2) # [B, inner, d_state]
+            h = dA_t * h + dB_t
+            y_t = (h * C_ssm[:, t, :].unsqueeze(-2)).sum(-1) + D  # [B, inner]
+            ys.append(y_t)
+        return torch.stack(ys, dim=1)
 
 
 # ---- Patch Embedding ----------------------------------------------
