@@ -77,11 +77,12 @@ def build_model(cfg: dict) -> nn.Module:
     raise ValueError(f"Unknown model: {m['name']}")
 
 
-def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0):
+def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0, scaler=None):
     model.train()
     total_loss = 0.0
     n_batches = len(loader)
-    for i, (x, y) in enumerate(loader):
+    use_amp = scaler is not None
+    for x, y in loader:
         x, y = x.to(device), y.to(device)
 
         if cutmix_fn is not None and torch.rand(1).item() < 0.5:
@@ -90,27 +91,31 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
             y_mixed = None
 
         optimizer.zero_grad()
-        out = model(x)
 
-        if y_mixed is not None:
-            y_target = y_mixed
-        else:
-            y_target = y
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            out = model(x)
 
+        y_target = y_mixed if y_mixed is not None else y
         alpha = out["alpha"]
         z = out.get("features", alpha)
         logits = out.get("logits", None)
 
-        loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch, logits=logits)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch, logits=logits)
+
+        if use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
 
         total_loss += loss.item()
         del out, loss, alpha, z
-
-        mem = torch.cuda.memory_allocated(device) / 1024**3
-        print(f"  batch {i+1}/{n_batches} loss={total_loss/(i+1):.4f} GPU={mem:.1f}G", flush=True)
 
     return total_loss / n_batches
 
@@ -258,11 +263,17 @@ def main():
         print(f"  Training {n_epochs} epochs (early stop patience={es_patience})...")
         torch.cuda.reset_peak_memory_stats(device)
 
+        use_amp = cfg["device"].get("amp", False) and device.type == "cuda"
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        if use_amp:
+            torch.set_float32_matmul_precision("high")
+            print(f"  AMP enabled (float32 matmul precision: high)")
+
         for epoch in range(start_epoch, n_epochs):
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
 
             train_loss = train_epoch(model, train_loader, optimizer,
-                                      cfg["loss"], device, cutmix_fn, epoch)
+                                      cfg["loss"], device, cutmix_fn, epoch, scaler)
 
             if epoch >= sch_cfg["warmup_epochs"]:
                 scheduler.step()

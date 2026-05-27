@@ -6,7 +6,6 @@ Arch Scan + Cross Scan + CGF×3 + EDL Head. ~17M params.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint as cp
 from .edl_head import EDLHead
 
 
@@ -57,10 +56,7 @@ class MambaBlock(nn.Module):
 
         A = -torch.exp(self.A_log)  # [1, d_state]
 
-        # 选择性扫描 (checkpoint 避免 O(L) autograd 中间状态)
-        y_ssm = cp.checkpoint(
-            self._ssm_scan, delta, A, B_ssm, C_ssm, self.D,
-            use_reentrant=False)
+        y_ssm = self._ssm_scan(delta, A, B_ssm, C_ssm, self.D)
 
         y = y_ssm * F.silu(z)
         y = self.out_proj(y)
@@ -68,21 +64,36 @@ class MambaBlock(nn.Module):
 
     @staticmethod
     def _ssm_scan(delta, A, B_ssm, C_ssm, D):
-        """逐帧离散 SSM 扫描 (memory-efficient: per-step dA/dB)."""
+        """并行化 SSM 扫描: cumprod/cumsum 替代逐帧 for 循环.
+
+        h_t = exp(delta_t * A) * h_{t-1} + delta_t * B_t
+        → 向量化: h_t = a_cumprod[t] * cumsum(b / a_cumprod)[t]
+
+        float64 计算保证长序列数值稳定性.
+        """
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
-        A = A.view(1, d_state)  # [1, d_state]
 
-        h = torch.zeros(B_sz, inner, d_state, device=delta.device)
-        ys = []
-        for t in range(L):
-            d_t = delta[:, t, :].unsqueeze(-1)        # [B, inner, 1]
-            dA_t = torch.exp(d_t * A)                  # [B, inner, d_state]
-            dB_t = d_t * B_ssm[:, t, :].unsqueeze(-2) # [B, inner, d_state]
-            h = dA_t * h + dB_t
-            y_t = (h * C_ssm[:, t, :].unsqueeze(-2)).sum(-1) + D  # [B, inner]
-            ys.append(y_t)
-        return torch.stack(ys, dim=1)
+        delta_d = delta.double()
+        A_d = A.view(1, 1, 1, d_state).double()
+        B_d = B_ssm.unsqueeze(2).double()
+        C_d = C_ssm.unsqueeze(2).double()
+
+        log_a = delta_d.unsqueeze(-1) * A_d               # [B, L, inner, d_state]
+        log_a_cum = torch.cumsum(log_a, dim=1)
+
+        b = delta_d.unsqueeze(-1) * B_d                   # [B, L, inner, d_state]
+
+        a_cum = torch.exp(log_a_cum)
+        a_cum_safe = a_cum.clamp(min=1e-30)
+        b_discounted = b / a_cum_safe
+        b_discounted = torch.nan_to_num(b_discounted, nan=0.0, posinf=0.0, neginf=0.0)
+
+        h = a_cum * torch.cumsum(b_discounted, dim=1)
+        h = torch.nan_to_num(h, nan=0.0, posinf=0.0, neginf=0.0)
+
+        y = (h.float() * C_d.float()).sum(-1) + D.float()  # [B, L, inner]
+        return y
 
 
 # ---- Patch Embedding ----------------------------------------------
