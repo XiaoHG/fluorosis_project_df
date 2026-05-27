@@ -29,6 +29,12 @@ build/
 *.swp
 *.swo
 
+# Claude
+.claude/
+
+# Email credentials
+00_Admin/scripts/.email_env
+
 # Obsidian
 .obsidian/
 

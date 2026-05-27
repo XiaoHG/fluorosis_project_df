@@ -6,7 +6,13 @@
 set -euo pipefail
 
 PROJECT_DIR="/Volumes/KINGSTON/fluorosis_project/fluorosis_project_df"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
+
+# 加载邮箱密码
+if [ -f "$SCRIPT_DIR/.email_env" ]; then
+    source "$SCRIPT_DIR/.email_env"
+fi
 
 REPORT_FILE=$(mktemp)
 trap "rm -f $REPORT_FILE" EXIT
