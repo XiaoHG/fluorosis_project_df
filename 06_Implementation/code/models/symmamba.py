@@ -63,15 +63,15 @@ class MambaBlock(nn.Module):
         return residual + self.dropout(y)
 
     @staticmethod
-    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size: int = 512):
-        """分段并行 SSM 扫描: chunk 间顺序传递 h_state, chunk 内 cumsum 向量化.
+    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size: int = 256):
+        """分段逐 state 并行扫描: 不对 d_state 广播, 避免 16× 显存放.
 
-        全序列向量化会 OOM (L=8192 时单 tensor 6+ GB).
-        chunk_size=512 时每段 ~50 MB, ~16 次迭代.
+        原版 broadcast [B,K,inner,d_state] 每 chunk 200 MB.
+        逐 state 处理后每 state 仅 [B,K,inner] = 12 MB, 16 次迭代.
         """
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
-        A_v = A.view(1, 1, 1, d_state)  # [1, 1, 1, d_state]
+        A = A.view(d_state)  # [d_state]
 
         # 填充到整 chunk
         if L % chunk_size != 0:
@@ -94,24 +94,27 @@ class MambaBlock(nn.Module):
             C_c = C_ssm[:, s:e]          # [B, K, d_state]
             K = d_c.size(1)
 
-            log_a = d_c.unsqueeze(-1) * A_v            # [B, K, inner, d_state]
-            log_a_cum = torch.cumsum(log_a, dim=1)
+            y_c = torch.zeros(B_sz, K, inner, device=delta.device)
+            h_new = torch.empty_like(h)
 
-            b = d_c.unsqueeze(-1) * B_c.unsqueeze(2)   # [B, K, inner, d_state]
+            for s_idx in range(d_state):
+                a_s = d_c * A[s_idx]                       # [B, K, inner]
+                a_cum = torch.exp(torch.cumsum(a_s, dim=1)) # [B, K, inner]
+                b_s = d_c * B_c[:, :, s_idx]               # [B, K, inner]
 
-            a_cum = torch.exp(log_a_cum)
-            # h_init 贡献: a_cum[t] * h_prev
-            h_c = a_cum * h.unsqueeze(1)
-            # b 贡献: a_cum[t] * cumsum(b / a_cum)[t]
-            b_scaled = b / a_cum.clamp(min=1e-15)
-            b_scaled = torch.nan_to_num(b_scaled, nan=0.0, posinf=0.0, neginf=0.0)
-            h_c = h_c + a_cum * torch.cumsum(b_scaled, dim=1)
-            h_c = torch.nan_to_num(h_c, nan=0.0, posinf=0.0, neginf=0.0)
+                # h_init 贡献
+                h_c = a_cum * h[:, :, s_idx].unsqueeze(1)  # [B, K, inner]
+                # b 贡献
+                b_scaled = b_s / a_cum.clamp(min=1e-15)
+                b_scaled = torch.nan_to_num(b_scaled, nan=0.0, posinf=0.0, neginf=0.0)
+                h_c = h_c + a_cum * torch.cumsum(b_scaled, dim=1)
 
-            y_c = (h_c * C_c.unsqueeze(2)).sum(-1) + D  # [B, K, inner]
+                y_c += h_c * C_c[:, :, s_idx]              # [B, K, inner]
+                h_new[:, :, s_idx] = h_c[:, -1]            # [B, inner]
+
+            y_c += D  # skip connection
             ys.append(y_c)
-
-            h = h_c[:, -1]  # 传给下一段
+            h = h_new
 
         return torch.cat(ys, dim=1)[:, :L]
 
