@@ -6,6 +6,7 @@ import os
 import sys
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from datetime import datetime
 
 
@@ -21,7 +22,7 @@ def send_report(report_text: str, to_email: str = "xiaohggg@gmail.com",
         return False
 
     msg = MIMEMultipart()
-    msg["From"] = from_email
+    msg["From"] = formataddr(("氟斑牙项目助手", from_email))
     msg["To"] = to_email
     msg["Subject"] = f"氟斑牙项目整理报告 — {datetime.now().strftime('%Y-%m-%d')}"
     msg.attach(MIMEText(report_text, "plain", "utf-8"))
