@@ -100,7 +100,7 @@ class MambaBlock(nn.Module):
             for s_idx in range(d_state):
                 a_s = d_c * A[s_idx]                       # [B, K, inner]
                 a_cum = torch.exp(torch.cumsum(a_s, dim=1)) # [B, K, inner]
-                b_s = d_c * B_c[:, :, s_idx]               # [B, K, inner]
+                b_s = d_c * B_c[:, :, s_idx:s_idx+1]         # [B, K, inner]
 
                 # h_init 贡献
                 h_c = a_cum * h[:, :, s_idx].unsqueeze(1)  # [B, K, inner]
@@ -109,7 +109,7 @@ class MambaBlock(nn.Module):
                 b_scaled = torch.nan_to_num(b_scaled, nan=0.0, posinf=0.0, neginf=0.0)
                 h_c = h_c + a_cum * torch.cumsum(b_scaled, dim=1)
 
-                y_c += h_c * C_c[:, :, s_idx]              # [B, K, inner]
+                y_c += h_c * C_c[:, :, s_idx:s_idx+1]       # [B, K, inner]
                 h_new[:, :, s_idx] = h_c[:, -1]            # [B, inner]
 
             y_c += D  # skip connection
