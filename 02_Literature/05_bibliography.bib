@@ -1,0 +1,416 @@
+---
+date: 2026-05-21
+author: LitAgent
+input_from: "02_Literature/01_initial_search/literature_list.md, 02_Literature/02_deep_read/ 全部精读摘要"
+output_to: "02_Literature/05_bibliography.bib"
+status: draft
+---
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 02_Literature/05_bibliography.bib
+% 氟斑牙DL分级诊断项目 — 参考文献库
+% 生成日期: 2026-05-21
+% 包含: 初筛列表 + 精读文献 + 补充参考文献
+% Citation Key 格式: FirstAuthorYear_Keyword
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%==========================================================
+% A. 氟斑牙 DL 直接方法 (Tier 1)
+%==========================================================
+
+@article{Wu2024_MLTrMR,
+  author    = {Yun Wu and Hao Xu and Maohua Gu and Zhongchuan Jiang and Jun Xu and Youliang Tian},
+  title     = {Masked Latent Transformer with the Random Masking Ratio to Advance the Diagnosis of Dental Fluorosis},
+  journal   = {arXiv preprint},
+  volume    = {arXiv:2404.13564v1},
+  year      = {2024},
+  month     = apr,
+  note      = {Code and dataset available at https://github.com/uxhao-o/MLTrMR},
+  keywords  = {dental fluorosis, deep learning, masked latent transformer, ViT, automated diagnosis, DFID dataset}
+}
+
+@article{Gu2024_FusionDentNet,
+  author    = {Maohua Gu and Yun Wu and Zhongchuan Jiang and Hao Xu},
+  title     = {Integrated Method for Grading Diagnosis of Dental Fluorosis Combined with Segmentation and Classification},
+  journal   = {Biomedical Signal Processing and Control},
+  volume    = {96},
+  pages     = {106510},
+  year      = {2024},
+  doi       = {10.1016/j.bspc.2024.106510},
+  note      = {Dataset available at https://github.com/yunwu2024/dental_fluorosis},
+  keywords  = {dental fluorosis, deep learning, image segmentation, image classification, FusionDentNet, post-processing}
+}
+
+@article{Li2026_LD2Net,
+  author    = {Minghan Li and Yun Wu and Zhihao Li and Chengdong Ye},
+  title     = {LD2Net: Real-Time Lightweight Fluorosis Grading with Depthwise Separable Convolution and Dual-Axis Attentional Intelligence},
+  journal   = {Journal of Real-Time Image Processing},
+  volume    = {23},
+  pages     = {85},
+  year      = {2026},
+  doi       = {10.1007/s11554-026-01874-4},
+  keywords  = {dental fluorosis, model lightweighting, real-time processing, knowledge transfer, three-dimensional attention}
+}
+
+@inproceedings{Ahmed2024_FluorosisWeb,
+  author    = {Sk. Zayeem Ahmed and K. Sri Kavya and R. Lalitha Karthik and S. Hemanth Mani},
+  title     = {Dental Fluorosis Analysis: A Web-Based Dental Fluorosis Severity Detection},
+  booktitle = {2024 3rd International Conference for Innovation in Technology (INOCON)},
+  year      = {2024},
+  doi       = {10.1109/INOCON60754.2024.10511698},
+  publisher = {IEEE},
+  keywords  = {dental fluorosis, CNN, YOLO, web application, severity detection}
+}
+
+@article{Xu2025_MwincMamba,
+  author    = {Hao Xu and Yun Wu and Rui Xie and Jun Xu and Junpeng Wu and Rongpin Wang and Youliang Tian},
+  title     = {Convolutional State Space Model with Multi-Window Cross-Scan to Advance the Automated Diagnosis of Skeletal Fluorosis},
+  journal   = {Biomedical Signal Processing and Control},
+  volume    = {103},
+  pages     = {107439},
+  year      = {2025},
+  doi       = {10.1016/j.bspc.2024.107439},
+  note      = {Code and dataset available at https://github.com/uxhao-o/Mwinc-Mamba},
+  keywords  = {skeletal fluorosis, deep learning, convolutional state space model, multi-window cross-scan, Mamba, SSM}
+}
+
+%==========================================================
+% B. 氟斑牙传统方法 (Tier 2 — 方法演进)
+%==========================================================
+
+@inproceedings{Petaitiemthong2022_EQIE_FCM,
+  author    = {Natchapon Petaitiemthong and Sansanee Auephanwiriyakul and Nipon Theera-Umpon and Chatpat Kongpun},
+  title     = {Dental Fluorosis Segmentation Using Enhanced Quantum-Inspired Fuzzy Clustering Algorithm},
+  booktitle = {2022 37th International Technical Conference on Circuits/Systems, Computers and Communications (ITC-CSCC)},
+  year      = {2022},
+  doi       = {10.1109/ITC-CSCC55581.2022.9894942},
+  publisher = {IEEE},
+  keywords  = {dental fluorosis, segmentation, quantum-inspired fuzzy clustering, EQIE-FCM, HSV color space}
+}
+
+@inproceedings{Jain2021_KMeans_FCM,
+  author    = {Richa Jain and Devesh Saini and Aakash Singal and Rishabh Tiwari},
+  title     = {Detection of Dental Fluorosis Using Enhanced K-Means and Fuzzy C-Means},
+  booktitle = {2021 Third International Conference on Inventive Research in Computing Applications (ICIRCA)},
+  year      = {2021},
+  doi       = {10.1109/ICIRCA51532.2021.9544836},
+  publisher = {IEEE},
+  keywords  = {dental fluorosis, K-means, fuzzy C-means, unsupervised learning, HSV, area-based grading}
+}
+
+@article{Montasser2023_PSO_KNN,
+  author    = {Montasser, [待确认]},
+  title     = {[Particle Optimization Scoring K-Nearest Neighbor for Dental Fluorosis Prediction]},
+  journal   = {[待确认]},
+  year      = {2023},
+  note      = {二元预测模型，94.5%准确率，328条记录56个特征},
+  keywords  = {dental fluorosis, PSO, KNN, binary prediction}
+}
+
+%==========================================================
+% C. 氟斑牙临床与机制 (Tier 2 — 临床背景)
+%==========================================================
+
+@article{Fejerskov1990_FluorosisMechanisms,
+  author    = {O. Fejerskov and F. Manji and V. Baelum},
+  title     = {The Nature and Mechanisms of Dental Fluorosis in Man},
+  journal   = {Journal of Dental Research},
+  volume    = {69},
+  number    = {Special Issue},
+  pages     = {692--700},
+  year      = {1990},
+  doi       = {10.1177/00220345900690S135},
+  keywords  = {dental fluorosis, pathogenesis, TF index, enamel, dose-response, histopathology}
+}
+
+@article{Cutress1990_DifferentialDiagnosis,
+  author    = {T. W. Cutress and G. W. Suckling},
+  title     = {Differential Diagnosis of Dental Fluorosis},
+  journal   = {Journal of Dental Research},
+  volume    = {69},
+  number    = {Special Issue},
+  pages     = {714--720},
+  year      = {1990},
+  note      = {Presented at Joint IADR/ORCA International Symposium on Fluorides, 1989},
+  keywords  = {dental fluorosis, differential diagnosis, enamel opacities, Dean's index, fluoride}
+}
+
+@article{Wei2019_FluorosisPathogenesis,
+  author    = {Wei W and [待补充]},
+  title     = {The Pathogenesis of Endemic Fluorosis: Research Progress in the Last 5 Years},
+  journal   = {Journal of Cellular and Molecular Medicine},
+  year      = {2019},
+  keywords  = {endemic fluorosis, pathogenesis, review, skeletal fluorosis, dental fluorosis}
+}
+
+@article{Smith1985_FluorideTeethBone,
+  author    = {G. E. Smith},
+  title     = {Fluoride, Teeth and Bone},
+  journal   = {Medical Journal of Australia},
+  year      = {1985},
+  keywords  = {fluoride, teeth, bone, review}
+}
+
+%==========================================================
+% D. 牙科影像 AI (Tier 3 — 可迁移方法)
+%==========================================================
+
+@article{Zannah2024_UNet_DentalXRay,
+  author    = {Rafiatul Zannah and Mubtasim Bashar and Rahil Bin Mushfiq and Amitabha Chakrabarty and Shahriar Hossain and Yong Ju Jung},
+  title     = {Semantic Segmentation on Panoramic Dental X-Ray Images Using U-Net Architectures},
+  journal   = {IEEE Access},
+  volume    = {12},
+  pages     = {44598--44611},
+  year      = {2024},
+  doi       = {10.1109/ACCESS.2024.3380027},
+  keywords  = {dental, semantic segmentation, OPG image, U-Net, U-Net variants, IoU}
+}
+
+@inproceedings{Salunke2022_DentalDLSurvey,
+  author    = {Dipmala Salunke and Ram Joshi and Prasad Peddi and D. T. Mane},
+  title     = {Deep Learning Techniques for Dental Image Diagnostics: A Survey},
+  booktitle = {2022 International Conference on Augmented Intelligence and Sustainable Systems (ICAISS)},
+  year      = {2022},
+  doi       = {10.1109/ICAISS55157.2022.10010576},
+  publisher = {IEEE},
+  keywords  = {dental image diagnostics, deep learning, CNN, caries detection, survey}
+}
+
+@article{Dentistry_AI_Digital_2023,
+  author    = {[待确认]},
+  title     = {Artificial Intelligence and Other Modern Digital Technologies in Dentistry},
+  journal   = {[待确认]},
+  year      = {2023},
+  keywords  = {artificial intelligence, digital dentistry, review}
+}
+
+%==========================================================
+% E. 医学图像分割 SOTA (Tier 4 — 技术参考)
+%==========================================================
+
+@article{Dolz2019_HyperDenseNet,
+  author    = {Jose Dolz and Karthik Gopinath and Jing Yuan and Herve Lombaert and Christian Desrosiers and Ismail Ben Ayed},
+  title     = {HyperDense-Net: A Hyper-Densely Connected CNN for Multi-Modal Image Segmentation},
+  journal   = {IEEE Transactions on Medical Imaging},
+  volume    = {38},
+  number    = {5},
+  pages     = {1116--1128},
+  year      = {2019},
+  doi       = {10.1109/TMI.2018.2878669},
+  keywords  = {medical image segmentation, multi-modal, dense connectivity, CNN, brain segmentation}
+}
+
+@inproceedings{Zhou2024_CD_TransUNet,
+  author    = {Junkai Zhou and Ben Ye},
+  title     = {CD-TransUNet: Enhanced UNet for Medical Image Segmentation via Global and Local Feature Fusion},
+  booktitle = {2024 3rd International Conference on Image Processing and Media Computing (ICIPMC)},
+  year      = {2024},
+  doi       = {10.1109/ICIPMC62364.2024.10586680},
+  publisher = {IEEE},
+  keywords  = {medical image segmentation, U-Net, Transformer, CNN, feature fusion}
+}
+
+@article{Wu2025_HMDA,
+  author    = {Mengmeng Wu and Tiantian Liu and Xin Dai and Chuyang Ye and Jinglong Wu and Shintaro Funahashi and Tianyi Yan},
+  title     = {HMDA: A Hybrid Model With Multi-Scale Deformable Attention for Medical Image Segmentation},
+  journal   = {IEEE Journal of Biomedical and Health Informatics},
+  volume    = {29},
+  number    = {2},
+  year      = {2025},
+  doi       = {10.1109/JBHI.2024.3469230},
+  keywords  = {medical image segmentation, deformable attention, multi-scale, CNN-Transformer hybrid}
+}
+
+@article{Wu2026_CURSA_ViT,
+  author    = {Chong Wu and Maolin Che and Hong Yan},
+  title     = {The CUR Decomposition of Self-Attention Matrices in Vision Transformers},
+  journal   = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume    = {48},
+  number    = {4},
+  year      = {2026},
+  doi       = {10.1109/TPAMI.2025.3646452},
+  keywords  = {vision transformer, self-attention, CUR decomposition, linear complexity, model efficiency}
+}
+
+@article{Zhang2024_SMTF,
+  author    = {Xichu Zhang and Xiaozhi Zhang and Lijun Ouyang and Chuanbo Qin and Lin Xiao and Dongping Xiong},
+  title     = {SMTF: Sparse Transformer with Multi-scale Contextual Fusion for Medical Image Segmentation},
+  journal   = {Biomedical Signal Processing and Control},
+  volume    = {87},
+  pages     = {105458},
+  year      = {2024},
+  keywords  = {medical image segmentation, sparse attention, deep supervision, transformer}
+}
+
+@article{Meng2025_AFCUnet,
+  author    = {Wenjie Meng and Shujun Liu and Huajun Wang},
+  title     = {AFC-Unet: Attention-Fused Full-Scale CNN-Transformer Unet for Medical Image Segmentation},
+  journal   = {Biomedical Signal Processing and Control},
+  volume    = {99},
+  pages     = {106839},
+  year      = {2025},
+  keywords  = {medical image segmentation, multi-scale feature fusion, attention mechanisms, CNN-Transformer hybrid}
+}
+
+@article{Gao2025_PFormer,
+  author    = {Yueyang Gao and Jinhui Zhang and Siyi Wei and Zheng Li},
+  title     = {PFormer: An Efficient CNN-Transformer Hybrid Network with Content-Driven P-Attention for 3D Medical Image Segmentation},
+  journal   = {Biomedical Signal Processing and Control},
+  volume    = {101},
+  pages     = {107154},
+  year      = {2025},
+  keywords  = {3D medical image segmentation, CNN-Transformer hybrid, P-attention}
+}
+
+@article{Fu2024_TSCANet,
+  author    = {Yinghua Fu and Junfeng Liu and Jun Shi},
+  title     = {TSCA-Net: Transformer Based Spatial-Channel Attention Segmentation Network for Medical Images},
+  journal   = {Computers in Biology and Medicine},
+  volume    = {170},
+  pages     = {107938},
+  year      = {2024},
+  keywords  = {medical image segmentation, spatial and channel attention, transformer, feature fusion}
+}
+
+@article{Sun2024_SemiSupervised_MultiModal,
+  author    = {Huajun Sun and Jia Wei and Wenguang Yuan and Rui Li},
+  title     = {Semi-Supervised Multi-Modal Medical Image Segmentation with Unified Translation},
+  journal   = {Computers in Biology and Medicine},
+  volume    = {176},
+  pages     = {108570},
+  year      = {2024},
+  keywords  = {semi-supervised, multi-modal, medical image segmentation, unified translation}
+}
+
+@article{Razmjouei2025_NFR_EDL,
+  author    = {Pouyan Razmjouei and Elaheh Moharamkhani and Seyed Sasan Aryanezhad},
+  title     = {NFR-EDL: Non-Linear Fuzzy Rank-Based Ensemble Deep Learning for Accurate Diagnosis of Oral and Dental Diseases Using RGB Color Photography},
+  journal   = {Computers in Biology and Medicine},
+  volume    = {192},
+  pages     = {110279},
+  year      = {2025},
+  keywords  = {oral disease diagnosis, deep learning, ensemble learning, RGB photography, fuzzy rank}
+}
+
+@article{Liang2023_MAXFormer,
+  author    = {Zhiwei Liang and Kui Zhao and Gang Liang and Siyu Li and Yifei Wu and Yiping Zhou},
+  title     = {MAXFormer: Enhanced Transformer for Medical Image Segmentation with Multi-Attention and Multi-Scale Features Fusion},
+  journal   = {Knowledge-Based Systems},
+  volume    = {280},
+  pages     = {110987},
+  year      = {2023},
+  keywords  = {medical image segmentation, transformer, multi-attention, multi-scale fusion}
+}
+
+@article{Li2024_TranSiam,
+  author    = {Xuejian Li and Shiqiang Ma and Junhai Xu and Jijun Tang and Shengfeng He and Fei Guo},
+  title     = {TranSiam: Aggregating Multi-Modal Visual Features with Locality for Medical Image Segmentation},
+  journal   = {Expert Systems With Applications},
+  volume    = {237},
+  pages     = {121574},
+  year      = {2024},
+  keywords  = {medical image segmentation, multi-modal, Siamese, visual features}
+}
+
+@article{Yang2024_DTC_SUNETR,
+  author    = {Fan Yang and Bo Wang},
+  title     = {Dual Channel-Spatial Self-Attention Transformer and CNN Synergy Network for 3D Medical Image Segmentation},
+  journal   = {Applied Soft Computing},
+  volume    = {167},
+  pages     = {112255},
+  year      = {2024},
+  keywords  = {3D medical image segmentation, CNN-Transformer, self-attention, channel-spatial attention}
+}
+
+@article{Li2024_DiagSWin,
+  author    = {Ke Li and Di Wang and Gang Liu and Wenxuan Zhu and Haodi Zhong and Quan Wang},
+  title     = {DiagSWin: A Multi-Scale Vision Transformer with Diagonal-Shaped Windows for Object Detection and Segmentation},
+  journal   = {Neural Networks},
+  volume    = {180},
+  pages     = {106653},
+  year      = {2024},
+  keywords  = {vision transformer, multi-scale, diagonal-shaped windows, object detection, semantic segmentation}
+}
+
+%==========================================================
+% F. 基础深度学习参考文献
+%==========================================================
+
+@inproceedings{He2016_ResNet,
+  author    = {Kaiming He and Xiangyu Zhang and Shaoqing Ren and Jian Sun},
+  title     = {Deep Residual Learning for Image Recognition},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2016},
+  pages     = {770--778},
+  keywords  = {residual learning, deep CNN, ImageNet}
+}
+
+@inproceedings{Huang2017_DenseNet,
+  author    = {Gao Huang and Zhuang Liu and Laurens van der Maaten and Kilian Q. Weinberger},
+  title     = {Densely Connected Convolutional Networks},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2017},
+  keywords  = {dense connectivity, CNN, feature reuse}
+}
+
+@article{Dosovitskiy2021_ViT,
+  author    = {Alexey Dosovitskiy and Lucas Beyer and Alexander Kolesnikov and Dirk Weissenborn and Xiaohua Zhai and Thomas Unterthiner and Mostafa Dehghani and Matthias Minderer and Georg Heigold and Sylvain Gelly and Jakob Uszkoreit and Neil Houlsby},
+  title     = {An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale},
+  journal   = {International Conference on Learning Representations (ICLR)},
+  year      = {2021},
+  keywords  = {vision transformer, self-attention, image classification}
+}
+
+@inproceedings{Liu2021_SwinTransformer,
+  author    = {Ze Liu and Yutong Lin and Yue Cao and Han Hu and Yixuan Wei and Zheng Zhang and Stephen Lin and Baining Guo},
+  title     = {Swin Transformer: Hierarchical Vision Transformer using Shifted Windows},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2021},
+  keywords  = {swin transformer, hierarchical, shifted windows, self-attention}
+}
+
+@inproceedings{Ronneberger2015_UNet,
+  author    = {Olaf Ronneberger and Philipp Fischer and Thomas Brox},
+  title     = {U-Net: Convolutional Networks for Biomedical Image Segmentation},
+  booktitle = {Medical Image Computing and Computer-Assisted Intervention (MICCAI)},
+  year      = {2015},
+  keywords  = {U-Net, biomedical image segmentation, encoder-decoder, skip connections}
+}
+
+@article{Dean1934_Classification,
+  author    = {H. T. Dean},
+  title     = {Classification of Mottled Enamel Diagnosis},
+  journal   = {Journal of the American Dental Association},
+  volume    = {21},
+  pages     = {1421--1426},
+  year      = {1934},
+  keywords  = {mottled enamel, Dean's classification, fluorosis diagnosis}
+}
+
+@article{Thylstrup1978_TF_Index,
+  author    = {A. Thylstrup and O. Fejerskov},
+  title     = {Clinical Appearance of Dental Fluorosis in Permanent Teeth in Relation to Histologic Changes},
+  journal   = {Community Dentistry and Oral Epidemiology},
+  volume    = {6},
+  pages     = {315--328},
+  year      = {1978},
+  keywords  = {TF index, dental fluorosis, histopathology, enamel}
+}
+
+@article{Horowitz1984_TSIF,
+  author    = {H. S. Horowitz and W. S. Driscoll and R. J. Meyers and S. B. Heifetz and A. Kingman},
+  title     = {A New Method for Assessing the Prevalence of Dental Fluorosis — the Tooth Surface Index of Fluorosis},
+  journal   = {Journal of the American Dental Association},
+  volume    = {109},
+  pages     = {37--41},
+  year      = {1984},
+  keywords  = {TSIF, fluorosis index, tooth surface, prevalence}
+}
+
+@article{He2022_MAE,
+  author    = {Kaiming He and Xinlei Chen and Saining Xie and Yanghao Li and Piotr Dollar and Ross Girshick},
+  title     = {Masked Autoencoders Are Scalable Vision Learners},
+  journal   = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2022},
+  keywords  = {masked autoencoder, self-supervised learning, ViT, pre-training}
+}
