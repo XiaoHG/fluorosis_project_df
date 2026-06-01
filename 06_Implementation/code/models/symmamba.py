@@ -66,11 +66,11 @@ class MambaBlock(nn.Module):
         return residual + self.dropout(y)
 
     @staticmethod
-    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size=64):
+    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size=16):
         """分块向量化 SSM 扫描 — chunk 内 cumprod/cumsum, chunk 间递推 h.
 
-        原逐 token 循环 L 次 Python→CUDA kernel launch; 分块后 8192→128 次.
-        每 chunk 内 cumsum/cumprod 完全 GPU 向量化.
+        chunk_size=16: cumsum 最大 ~-45, exp(45)≈3.5e19 在 float32 内安全.
+        exp(-log) 加 clamp [-80,80] 双保险防 backward overflow.
         闭式: h[t] = cumprod_a[t] * (h_init + cumsum(b / cumprod_a)[t])
         """
         B_sz, L, inner = delta.shape
@@ -84,7 +84,6 @@ class MambaBlock(nn.Module):
             c_end = min(c_start + chunk_size, L)
             c_len = c_end - c_start
 
-            # 取出 chunk
             d_c = delta[:, c_start:c_end].contiguous()  # [B, c_len, inner]
             b_c = B_ssm[:, c_start:c_end].contiguous()  # [B, c_len, d_state]
             c_c = C_ssm[:, c_start:c_end].contiguous()  # [B, c_len, d_state]
@@ -95,16 +94,16 @@ class MambaBlock(nn.Module):
 
             b_t = d_c.unsqueeze(-1) * b_c.unsqueeze(-2)  # [B, c_len, inner, d_state]
             cumprod_A = torch.exp(log_cumprod_A)
-            b_over_a = b_t * torch.exp(-log_cumprod_A)
+            # clamp exp 输入防 backward 溢出 (float32 safe: [-80, 80])
+            b_over_a = b_t * torch.exp(torch.clamp(-log_cumprod_A, min=-80.0, max=80.0))
             b_cumsum = torch.cumsum(b_over_a, dim=1)
 
-            # 包含上一 chunk 隐状态 h_init 的贡献
             h_chunk = cumprod_A * (h.unsqueeze(1) + b_cumsum)
 
             y_chunk = (h_chunk * c_c.unsqueeze(-2)).sum(-1) + D  # [B, c_len, inner]
             all_y.append(y_chunk)
 
-            h = h_chunk[:, -1, :, :]  # 传递最终 h 到下一 chunk
+            h = h_chunk[:, -1, :, :]
 
         return torch.cat(all_y, dim=1)
 
