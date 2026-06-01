@@ -1,0 +1,112 @@
+{
+  "exp_name": "e4_full_symmamba",
+  "seed": 42,
+  "started_at": "2026-06-01T22:17:03.949751",
+  "git_commit": "26c69c9",
+  "git_branch": "main",
+  "device": "cuda:0",
+  "model": {
+    "name": "symmamba",
+    "variant": "full",
+    "total_params": 4177092,
+    "trainable_params": 4177092
+  },
+  "data": {
+    "dataset_size": 192,
+    "num_classes": 4,
+    "class_names": [
+      "normal",
+      "mild",
+      "moderate",
+      "severe"
+    ],
+    "image_size": [
+      512,
+      256
+    ]
+  },
+  "training": {
+    "batch_size": 12,
+    "epochs": 100,
+    "early_stop_patience": 20,
+    "early_stop_metric": "val_qwk",
+    "grad_clip_norm": 1.0
+  },
+  "optimizer": {
+    "name": "adamw",
+    "lr_backbone": 0.0002,
+    "lr_head": 0.0005,
+    "weight_decay": 0.0001,
+    "betas": [
+      0.9,
+      0.999
+    ]
+  },
+  "scheduler": {
+    "name": "cosine",
+    "warmup_epochs": 10,
+    "min_lr": 1e-06
+  },
+  "loss": {
+    "edl": {
+      "weight": 0.05
+    },
+    "ordinal": {
+      "weight": 0.05
+    },
+    "contrastive": {
+      "weight": 0.02,
+      "temperature": 0.07
+    },
+    "boundary": {
+      "weight": 0.005
+    },
+    "ce": {
+      "weight": 1.0
+    },
+    "kl": {
+      "weight": 0.02
+    }
+  },
+  "loss_schedule": {
+    "edl_start": 20,
+    "edl_ramp": 15,
+    "kl_start": 20,
+    "kl_ramp": 15,
+    "aux_start": 35,
+    "aux_ramp": 20
+  },
+  "model_cfg": {
+    "name": "symmamba",
+    "variant": "full",
+    "backbone": {
+      "patch_size": 4,
+      "embed_dim": 96,
+      "depths": [
+        4,
+        2,
+        2
+      ],
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "drop_path_rate": 0.1,
+      "dropout": 0.1
+    },
+    "edl_head": {
+      "hidden_dim": 256,
+      "dropout": 0.3
+    },
+    "ssl": {
+      "enabled": false,
+      "checkpoint": ""
+    }
+  },
+  "system": {
+    "pytorch_version": "2.5.0+cu118",
+    "cuda_available": true,
+    "cuda_version": "11.8",
+    "gpu_name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "gpu_count": 1
+  }
+}
