@@ -66,26 +66,47 @@ class MambaBlock(nn.Module):
         return residual + self.dropout(y)
 
     @staticmethod
-    def _ssm_scan(delta, A, B_ssm, C_ssm, D):
-        """逐帧 SSM 扫描 — O(1) 中间状态.
+    def _ssm_scan(delta, A, B_ssm, C_ssm, D, chunk_size=64):
+        """分块向量化 SSM 扫描 — chunk 内 cumprod/cumsum, chunk 间递推 h.
 
-        每步操作 [B, inner, d_state] = [B, 192, 16] ≈ 0.4 MB.
-        通过 checkpoint 丢弃 autograd 保存的 h 状态, backward 重算.
+        原逐 token 循环 L 次 Python→CUDA kernel launch; 分块后 8192→128 次.
+        每 chunk 内 cumsum/cumprod 完全 GPU 向量化.
+        闭式: h[t] = cumprod_a[t] * (h_init + cumsum(b / cumprod_a)[t])
         """
         B_sz, L, inner = delta.shape
         d_state = A.size(-1)
-        A = A.view(1, d_state)  # [1, d_state]
+        A_br = A.view(1, 1, 1, d_state)  # [1,1,1,d_state]
 
-        h = torch.zeros(B_sz, inner, d_state, device=delta.device)
-        ys = []
-        for t in range(L):
-            d_t = delta[:, t, :].unsqueeze(-1)        # [B, inner, 1]
-            dA_t = torch.exp(d_t * A)                  # [B, inner, d_state]
-            dB_t = d_t * B_ssm[:, t, :].unsqueeze(-2) # [B, inner, d_state]
-            h = dA_t * h + dB_t
-            y_t = (h * C_ssm[:, t, :].unsqueeze(-2)).sum(-1) + D  # [B, inner]
-            ys.append(y_t)
-        return torch.stack(ys, dim=1)
+        h = torch.zeros(B_sz, inner, d_state, device=delta.device, dtype=delta.dtype)
+        all_y = []
+
+        for c_start in range(0, L, chunk_size):
+            c_end = min(c_start + chunk_size, L)
+            c_len = c_end - c_start
+
+            # 取出 chunk
+            d_c = delta[:, c_start:c_end].contiguous()  # [B, c_len, inner]
+            b_c = B_ssm[:, c_start:c_end].contiguous()  # [B, c_len, d_state]
+            c_c = C_ssm[:, c_start:c_end].contiguous()  # [B, c_len, d_state]
+
+            # ---- chunk 内向量化递推 ----
+            dA_c = d_c.unsqueeze(-1) * A_br            # [B, c_len, inner, d_state]
+            log_cumprod_A = torch.cumsum(dA_c, dim=1)
+
+            b_t = d_c.unsqueeze(-1) * b_c.unsqueeze(-2)  # [B, c_len, inner, d_state]
+            cumprod_A = torch.exp(log_cumprod_A)
+            b_over_a = b_t * torch.exp(-log_cumprod_A)
+            b_cumsum = torch.cumsum(b_over_a, dim=1)
+
+            # 包含上一 chunk 隐状态 h_init 的贡献
+            h_chunk = cumprod_A * (h.unsqueeze(1) + b_cumsum)
+
+            y_chunk = (h_chunk * c_c.unsqueeze(-2)).sum(-1) + D  # [B, c_len, inner]
+            all_y.append(y_chunk)
+
+            h = h_chunk[:, -1, :, :]  # 传递最终 h 到下一 chunk
+
+        return torch.cat(all_y, dim=1)
 
 
 # ---- Patch Embedding ----------------------------------------------
