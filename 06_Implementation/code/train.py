@@ -89,22 +89,27 @@ def build_model(cfg: dict) -> nn.Module:
 
 
 def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0,
-                scaler=None, grad_clip=0.3):
+                scaler=None, grad_clip=0.3, grad_accum_steps=1):
+    """训练一个 epoch, 支持梯度累积.
+
+    grad_accum_steps 个 batch 的梯度求和后再 step, 等效 batch_size * grad_accum_steps.
+    """
     model.train()
     total_loss = 0.0
     n_batches = len(loader)
     use_amp = scaler is not None
     sum_comps = {}
     sum_grad_norm = 0.0
-    for x, y in loader:
+    n_steps = 0
+
+    optimizer.zero_grad()
+    for batch_idx, (x, y) in enumerate(loader):
         x, y = x.to(device), y.to(device)
 
         if cutmix_fn is not None and torch.rand(1).item() < 0.5:
             x, y_mixed = cutmix_fn(x, y)
         else:
             y_mixed = None
-
-        optimizer.zero_grad()
 
         with torch.amp.autocast('cuda', enabled=use_amp):
             out = model(x)
@@ -117,26 +122,41 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         with torch.amp.autocast('cuda', enabled=use_amp):
             loss, comps = compute_total_loss(alpha, y_target, z, loss_cfg, epoch, logits=logits)
 
+        # 梯度累积: loss 除以累积步数
+        loss = loss / grad_accum_steps
+
         if use_amp:
             scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            scaler.step(optimizer)
-            scaler.update()
         else:
             loss.backward()
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            optimizer.step()
 
-        total_loss += loss.item()
-        gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
-        sum_grad_norm += gn
+        total_loss += loss.item() * grad_accum_steps  # 还原真实 loss 用于日志
         for k, v in comps.items():
             sum_comps[k] = sum_comps.get(k, 0.0) + v
+
+        # 累积完成后更新参数
+        is_last = (batch_idx + 1) == n_batches
+        is_accum_step = (batch_idx + 1) % grad_accum_steps == 0
+        if is_accum_step or is_last:
+            if use_amp:
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                optimizer.step()
+
+            optimizer.zero_grad()
+            gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+            sum_grad_norm += gn
+            n_steps += 1
+
         del out, loss, alpha, z
 
     avg_comps = {k: v / n_batches for k, v in sum_comps.items()}
-    return total_loss / n_batches, avg_comps, sum_grad_norm / n_batches
+    avg_grad_norm = sum_grad_norm / max(n_steps, 1)
+    return total_loss / n_batches, avg_comps, avg_grad_norm
 
 
 @torch.no_grad()
@@ -297,9 +317,10 @@ def main():
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
 
             grad_clip = cfg["training"].get("grad_clip_norm", 0.3)
+            grad_accum = cfg["training"].get("grad_accum_steps", 1)
             train_loss, loss_comps, grad_norm = train_epoch(
                 model, train_loader, optimizer, cfg["loss"], device, cutmix_fn,
-                epoch, scaler, grad_clip)
+                epoch, scaler, grad_clip, grad_accum)
 
             if epoch >= sch_cfg["warmup_epochs"]:
                 scheduler.step()
