@@ -31,8 +31,18 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config(config_path: str, profile: str = None) -> dict:
-    with open(config_path) as f:
-        cfg = yaml.safe_load(f)
+    # 始终先加载 default.yaml 作为基础配置（含 device_profiles）
+    base_path = Path(config_path).parent / "default.yaml"
+    if base_path.exists():
+        with open(base_path, encoding='utf-8') as f:
+            cfg = yaml.safe_load(f)
+    else:
+        cfg = {}
+    # 合并用户指定的配置文件（覆盖默认值）
+    with open(config_path, encoding='utf-8') as f:
+        override = yaml.safe_load(f)
+    cfg = deep_merge(cfg, override)
+    # 应用设备 profile
     if profile and profile in cfg.get("device_profiles", {}):
         prof = cfg["device_profiles"][profile]
         cfg["device"].update(prof)

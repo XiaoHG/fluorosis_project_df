@@ -26,7 +26,7 @@ class ExperimentLogger:
         self.save_best_only = save_best_only
 
         self.csv_path = self.log_dir / "metrics.csv"
-        self.csv_file = open(self.csv_path, "w", newline="")
+        self.csv_file = open(self.csv_path, "w", newline="", encoding='utf-8')
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_header_written = False
 
@@ -132,7 +132,7 @@ class ExperimentLogger:
                 clean[k] = v.tolist()
             else:
                 clean[k] = v
-        with open(self.log_dir / filename, "w") as f:
+        with open(self.log_dir / filename, "w", encoding='utf-8') as f:
             json.dump(clean, f, indent=2)
 
     def elapsed(self) -> str:

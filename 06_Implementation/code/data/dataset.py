@@ -70,14 +70,14 @@ def generate_split_indices(dataset: FluorosisDataset, n_folds: int = 5,
         })
 
     if save_path:
-        with open(save_path, "w") as f:
+        with open(save_path, "w", encoding='utf-8') as f:
             json.dump(splits, f, indent=2)
 
     return splits
 
 
 def load_split_indices(path: str) -> list[dict]:
-    with open(path) as f:
+    with open(path, encoding='utf-8') as f:
         return json.load(f)
 
 
