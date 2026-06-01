@@ -54,7 +54,8 @@ def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def build_model(cfg: dict) -> nn.Module:
@@ -271,7 +272,8 @@ def main():
 
         n_epochs = cfg["training"]["epochs"]
         print(f"  Training {n_epochs} epochs (early stop patience={es_patience})...")
-        torch.cuda.reset_peak_memory_stats(device)
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
 
         use_amp = cfg["device"].get("amp", False) and device.type == "cuda"
         scaler = torch.amp.GradScaler('cuda', enabled=use_amp) if use_amp else None
@@ -299,16 +301,20 @@ def main():
 
             logger.write_row(epoch, val_metrics)
 
-            torch.cuda.empty_cache()
-            mem = torch.cuda.memory_allocated(device) / 1024**3
-            peak = torch.cuda.max_memory_allocated(device) / 1024**3
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+                mem = torch.cuda.memory_allocated(device) / 1024**3
+                peak = torch.cuda.max_memory_allocated(device) / 1024**3
+                gpu_str = f" | GPU: {mem:.1f}/{peak:.1f}G"
+            else:
+                gpu_str = ""
 
             pf = cfg["logging"].get("print_freq", 1)
             if (epoch + 1) % pf == 0 or epoch == 0 or is_best:
                 print(f"Epoch {epoch:3d} | loss: {train_loss:.4f} | "
                       f"Acc: {val_metrics.get('accuracy', 0):.4f} | F1: {val_metrics['macro_f1']:.4f} | "
                       f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
-                      f"theta*: {cal['theta']:.2f} | GPU: {mem:.1f}/{peak:.1f}G | "
+                      f"theta*: {cal['theta']:.2f}{gpu_str} | "
                       f"{logger.elapsed()} | {'* BEST' if is_best else ''}")
 
             rng_state = {
