@@ -9,9 +9,9 @@ __pycache__/
 dist/
 build/
 
-# Training outputs (keep dirs, ignore contents)
+# Training outputs — track metrics (text), ignore checkpoints (large binaries)
 06_Implementation/checkpoints/*
-06_Implementation/logs/*
+06_Implementation/logs/*.pt
 06_Implementation/results/*
 !06_Implementation/checkpoints/.gitkeep
 !06_Implementation/logs/.gitkeep

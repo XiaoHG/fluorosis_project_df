@@ -93,6 +93,8 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
     total_loss = 0.0
     n_batches = len(loader)
     use_amp = scaler is not None
+    # 累积 loss 分量
+    sum_comps = {}
     for x, y in loader:
         x, y = x.to(device), y.to(device)
 
@@ -126,9 +128,12 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
             optimizer.step()
 
         total_loss += loss.item()
+        for k, v in comps.items():
+            sum_comps[k] = sum_comps.get(k, 0.0) + v
         del out, loss, alpha, z
 
-    return total_loss / n_batches
+    avg_comps = {k: v / n_batches for k, v in sum_comps.items()}
+    return total_loss / n_batches, avg_comps
 
 
 @torch.no_grad()
@@ -221,6 +226,10 @@ def main():
         n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"  Model: {n_params:,} params ({n_trainable:,} trainable)")
 
+        # 保存实验元数据 (run_info.json)
+        logger.save_run_info(cfg, str(device), n_params, n_trainable,
+                             len(full_ds), cfg["data"]["num_classes"])
+
         head_params = []
         backbone_params = []
         for name, p in model.named_parameters():
@@ -284,14 +293,18 @@ def main():
         for epoch in range(start_epoch, n_epochs):
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
 
-            train_loss = train_epoch(model, train_loader, optimizer,
-                                      cfg["loss"], device, cutmix_fn, epoch, scaler)
+            train_loss, loss_comps = train_epoch(model, train_loader, optimizer,
+                                                  cfg["loss"], device, cutmix_fn, epoch, scaler)
 
             if epoch >= sch_cfg["warmup_epochs"]:
                 scheduler.step()
 
             val_metrics, cal = validate(model, val_loader, device)
             val_metrics["train_loss"] = train_loss
+            # 记录 loss 分量和学习率
+            val_metrics.update(loss_comps)
+            val_metrics["lr_backbone"] = optimizer.param_groups[0]["lr"]
+            val_metrics["lr_head"] = optimizer.param_groups[1]["lr"]
 
             is_best = logger.save_checkpoint(
                 model, epoch, val_metrics["qwk"],
@@ -306,6 +319,8 @@ def main():
                 mem = torch.cuda.memory_allocated(device) / 1024**3
                 peak = torch.cuda.max_memory_allocated(device) / 1024**3
                 gpu_str = f" | GPU: {mem:.1f}/{peak:.1f}G"
+                val_metrics["gpu_mem_gb"] = round(mem, 3)
+                val_metrics["gpu_peak_gb"] = round(peak, 3)
             else:
                 gpu_str = ""
 
