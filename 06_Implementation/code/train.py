@@ -88,13 +88,14 @@ def build_model(cfg: dict) -> nn.Module:
     raise ValueError(f"Unknown model: {m['name']}")
 
 
-def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0, scaler=None):
+def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoch=0,
+                scaler=None, grad_clip=0.3):
     model.train()
     total_loss = 0.0
     n_batches = len(loader)
     use_amp = scaler is not None
-    # 累积 loss 分量
     sum_comps = {}
+    sum_grad_norm = 0.0
     for x, y in loader:
         x, y = x.to(device), y.to(device)
 
@@ -119,21 +120,23 @@ def train_epoch(model, loader, optimizer, loss_cfg, device, cutmix_fn=None, epoc
         if use_amp:
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
 
         total_loss += loss.item()
+        gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+        sum_grad_norm += gn
         for k, v in comps.items():
             sum_comps[k] = sum_comps.get(k, 0.0) + v
         del out, loss, alpha, z
 
     avg_comps = {k: v / n_batches for k, v in sum_comps.items()}
-    return total_loss / n_batches, avg_comps
+    return total_loss / n_batches, avg_comps, sum_grad_norm / n_batches
 
 
 @torch.no_grad()
@@ -293,14 +296,17 @@ def main():
         for epoch in range(start_epoch, n_epochs):
             warmup_lr(epoch, sch_cfg["warmup_epochs"], base_lrs)
 
-            train_loss, loss_comps = train_epoch(model, train_loader, optimizer,
-                                                  cfg["loss"], device, cutmix_fn, epoch, scaler)
+            grad_clip = cfg["training"].get("grad_clip_norm", 0.3)
+            train_loss, loss_comps, grad_norm = train_epoch(
+                model, train_loader, optimizer, cfg["loss"], device, cutmix_fn,
+                epoch, scaler, grad_clip)
 
             if epoch >= sch_cfg["warmup_epochs"]:
                 scheduler.step()
 
             val_metrics, cal = validate(model, val_loader, device)
             val_metrics["train_loss"] = train_loss
+            val_metrics["grad_norm"] = round(grad_norm, 4)
             # 记录 loss 分量和学习率
             val_metrics.update(loss_comps)
             val_metrics["lr_backbone"] = optimizer.param_groups[0]["lr"]
@@ -315,12 +321,13 @@ def main():
             logger.write_row(epoch, val_metrics)
 
             if device.type == "cuda":
-                torch.cuda.empty_cache()
+                # 先采样再 empty_cache (order matters: empty_cache 会释放显存)
                 mem = torch.cuda.memory_allocated(device) / 1024**3
                 peak = torch.cuda.max_memory_allocated(device) / 1024**3
                 gpu_str = f" | GPU: {mem:.1f}/{peak:.1f}G"
                 val_metrics["gpu_mem_gb"] = round(mem, 3)
                 val_metrics["gpu_peak_gb"] = round(peak, 3)
+                torch.cuda.empty_cache()
             else:
                 gpu_str = ""
 
@@ -329,7 +336,7 @@ def main():
                 print(f"Epoch {epoch:3d} | loss: {train_loss:.4f} | "
                       f"Acc: {val_metrics.get('accuracy', 0):.4f} | F1: {val_metrics['macro_f1']:.4f} | "
                       f"QWK: {val_metrics['qwk']:.4f} | SDR: {val_metrics.get('sdr', 0):.4f} | "
-                      f"theta*: {cal['theta']:.2f}{gpu_str} | "
+                      f"theta*: {cal['theta']:.2f} | grad: {grad_norm:.2f}{gpu_str} | "
                       f"{logger.elapsed()} | {'* BEST' if is_best else ''}")
 
             rng_state = {
